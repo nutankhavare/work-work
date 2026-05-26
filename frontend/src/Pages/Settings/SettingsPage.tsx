@@ -3,6 +3,7 @@ import { useState, useEffect } from "react";
 import { Toggle } from "../../Components/UI/Toggle";
 import { useAuth } from "../../Context/AuthContext";
 import tenantApi from "../../Services/ApiService";
+import PageHeader from "../../Components/UI/PageHeader";
 
 /* ── Container Animations ── */
 const containerFade = {
@@ -310,44 +311,25 @@ export const SettingsPage = () => {
   const body: React.CSSProperties = { padding: "22px" };
 
   return (
-    <>
+    <div className="min-h-screen bg-[#F8FAFC] font-[var(--font-manrope)]">
       {/* ── Page Header ── */}
-      <div className="page-header">
-        <div>
-          <div className="page-title">
-            <span
-              className="material-symbols-outlined ms"
-              style={{ fontSize: 18 }}
-            >
-              settings
-            </span>
-            Settings
-          </div>
-          <div className="breadcrumb">
-            Admin <span>/</span> Settings
-          </div>
-        </div>
-        <div className="header-actions flex items-center gap-2 shrink-0">
-          <div className="hidden lg:flex gap-2">
-            <button
-              className="btn btn-primary"
-              onClick={handleSave}
-              disabled={saving}
-              style={{ opacity: saving ? 0.75 : 1 }}
-            >
-              <span
-                className="material-symbols-outlined ms"
-                style={{ fontSize: 16 }}
-              >
-                save
-              </span>
-              {saving ? "Saving…" : "Save Changes"}
-            </button>
-          </div>
-        </div>
-      </div>
+      <PageHeader
+        title="General Settings"
+        icon="settings"
+        breadcrumb="Admin / Account Settings"
+      >
+        <button
+          className="btn btn-primary !py-2.5"
+          onClick={handleSave}
+          disabled={saving}
+          style={{ opacity: saving ? 0.75 : 1 }}
+        >
+          <span className="material-symbols-outlined ms" style={{ fontSize: 16 }}>save</span>
+          {saving ? "Saving…" : "Save Changes"}
+        </button>
+      </PageHeader>
 
-      <div className="page-body pt-4 lg:pt-[24px]">
+      <div className="px-4 lg:px-6 pb-10 space-y-8">
         <motion.div
           variants={containerFade}
           initial="hidden"
@@ -690,7 +672,7 @@ export const SettingsPage = () => {
           </motion.div>
         </motion.div>
       </div>
-    </>
+    </div>
   );
 };
 

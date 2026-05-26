@@ -54,6 +54,8 @@ app.http("driversById", {
         }
 
         await client.query('BEGIN');
+        const oldDriver = await client.query(`SELECT beacon_id FROM schema1.institute_drivers WHERE id = $1 AND org_id = $2::text`, [driverId, String(token.org_id)]);
+        if (oldDriver.rows.length === 0) { await client.query('ROLLBACK'); return err(404, "Driver not found"); }
 
         try {
           const driverResult = await client.query(`
@@ -130,17 +132,23 @@ app.http("driversById", {
 
           // Sync beacon
           try {
-            const driverName = (driverResult.rows[0].first_name || '') + ' ' + (driverResult.rows[0].last_name || '');
-            await client.query(
-              `UPDATE schema1.institute_beacon SET assigned_to = NULL, assigned_type = NULL, synced_at = NOW()
-               WHERE assigned_to = $1 AND assigned_type = 'driver' AND allocated_to_org = $2::text`,
-              [driverName, String(token.org_id)]
-            );
-            if (fields.beacon_id) {
+            const oldBeaconId = oldDriver.rows[0].beacon_id;
+            const newBeaconId = fields.beacon_id;
+
+            if (oldBeaconId && oldBeaconId !== newBeaconId) {
               await client.query(
-                `UPDATE schema1.institute_beacon SET assigned_to = $1, assigned_type = 'driver', synced_at = NOW()
+                `UPDATE schema1.institute_beacon SET assigned_to = NULL, assigned_type = NULL, status = 'Unassigned', is_active = true, synced_at = NOW()
+                 WHERE device_id = $1 AND allocated_to_org = $2::text`,
+                [oldBeaconId, String(token.org_id)]
+              );
+            }
+
+            if (newBeaconId) {
+              const driverName = (driverResult.rows[0].first_name || '') + ' ' + (driverResult.rows[0].last_name || '');
+              await client.query(
+                `UPDATE schema1.institute_beacon SET assigned_to = $1, assigned_type = 'driver', status = 'Assigned', is_active = true, synced_at = NOW()
                  WHERE device_id = $2 AND allocated_to_org = $3::text`,
-                [driverName, fields.beacon_id, String(token.org_id)]
+                [driverName, newBeaconId, String(token.org_id)]
               );
             }
           } catch (_) { /* beacon table may not exist */ }
@@ -155,6 +163,15 @@ app.http("driversById", {
       if (req.method === "DELETE") {
         await client.query('BEGIN');
         try {
+          const driver = await client.query(`SELECT beacon_id FROM schema1.institute_drivers WHERE id = $1 AND org_id = $2::text`, [driverId, String(token.org_id)]);
+          if (driver.rows.length > 0 && driver.rows[0].beacon_id) {
+            await client.query(
+              `UPDATE schema1.institute_beacon SET assigned_to = NULL, assigned_type = NULL, status = 'Unassigned', is_active = true, synced_at = NOW()
+               WHERE device_id = $1 AND allocated_to_org = $2::text`,
+              [driver.rows[0].beacon_id, String(token.org_id)]
+            );
+          }
+
           await client.query(`DELETE FROM schema1.institute_driver_license_insurance WHERE driver_id = $1`, [driverId]);
           const result = await client.query(
             `DELETE FROM schema1.institute_drivers WHERE id = $1 AND org_id = $2::text`,

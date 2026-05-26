@@ -7,6 +7,7 @@ import LoadingSpinner from "../../Components/UI/LoadingSpinner";
 import PageHeader from "../../Components/UI/PageHeader";
 import tenantApi from "../../Services/ApiService";
 import { useAlert } from "../../Context/AlertContext";
+import { useConfirm } from "../../Context/ConfirmContext";
 import InfoTooltip from "../../Components/UI/InfoTooltip";
 import type { Vehicle } from "./Vehicle.types";
 import type { FormDropdown, BeaconDevice } from "../../Types/Index";
@@ -82,6 +83,7 @@ type VehicleFormPageProps = {
 const VehicleFormPage = ({ mode, vehicleId }: VehicleFormPageProps) => {
   const navigate = useNavigate();
   const { showAlert } = useAlert();
+  const confirm = useConfirm();
 
   const {
     register,
@@ -161,9 +163,13 @@ const VehicleFormPage = ({ mode, vehicleId }: VehicleFormPageProps) => {
     }
   }, [mode, vehicleId, reset]);
 
+  const onInvalid = () => {
+    showAlert("Please fill in all mandatory fields correctly.", "error");
+  };
+
   const onSubmit: SubmitHandler<FormInputs> = async (data) => {
     const action = mode === "create" ? "register" : "update";
-    if (!confirm(`Are you sure you want to ${action} this vehicle in the fleet?`)) return;
+    if (!(await confirm(`Are you sure you want to ${action} this vehicle in the fleet?`))) return;
 
     try {
       const formData = new FormData();
@@ -208,7 +214,7 @@ const VehicleFormPage = ({ mode, vehicleId }: VehicleFormPageProps) => {
       />
 
       <div className="max-w-[860px] mx-auto px-4 sm:px-0">
-        <form onSubmit={handleSubmit(onSubmit)}>
+        <form onSubmit={handleSubmit(onSubmit, onInvalid)}>
           
           <FormSection title="Basic Vehicle Information" icon="directions_bus">
              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -217,31 +223,35 @@ const VehicleFormPage = ({ mode, vehicleId }: VehicleFormPageProps) => {
                      <Hash size={14} className="text-slate-400" />
                      Vehicle Number*
                    </label>
-                   <input {...register("vehicle_number", { required: true })} className="form-input" placeholder="e.g. MH12AB1234" />
+                   <input {...register("vehicle_number", { required: "Vehicle number is required" })} className={`form-input ${errors.vehicle_number ? 'border-red-500 bg-red-50' : ''}`} placeholder="e.g. MH12AB1234" />
+                   {errors.vehicle_number && <p className="text-[10px] text-red-500 mt-1">{errors.vehicle_number.message}</p>}
                 </div>
                 <div>
                    <label className="form-label flex items-center gap-1.5">
                      <Layers size={14} className="text-slate-400" />
                      Vehicle Type*
                    </label>
-                   <select {...register("vehicle_type", { required: true })} className="form-select">
-                      <option value="">Select Type</option>
-                      {vehicleTypes.map(v => <option key={v.value} value={v.value}>{v.value}</option>)}
-                   </select>
+                    <select {...register("vehicle_type", { required: "Vehicle type is required" })} className={`form-select ${errors.vehicle_type ? 'border-red-500 bg-red-50' : ''}`}>
+                       <option value="">Select Type</option>
+                       {vehicleTypes.map(v => <option key={v.value} value={v.value}>{v.value}</option>)}
+                    </select>
+                    {errors.vehicle_type && <p className="text-[10px] text-red-500 mt-1">{errors.vehicle_type.message}</p>}
                 </div>
                 <div>
                    <label className="form-label flex items-center gap-1.5">
                      <Building2 size={14} className="text-slate-400" />
                      Manufacturer (OEM)*
                    </label>
-                   <input {...register("manufacturer", { required: true })} className="form-input" placeholder="e.g. Tata, Ashok Leyland" />
+                   <input {...register("manufacturer", { required: "Manufacturer is required" })} className={`form-input ${errors.manufacturer ? 'border-red-500 bg-red-50' : ''}`} placeholder="e.g. Tata, Ashok Leyland" />
+                   {errors.manufacturer && <p className="text-[10px] text-red-500 mt-1">{errors.manufacturer.message}</p>}
                 </div>
                 <div>
                    <label className="form-label flex items-center gap-1.5">
                      <Bus size={14} className="text-slate-400" />
                      Vehicle Model*
                    </label>
-                   <input {...register("vehicle_model", { required: true })} className="form-input" placeholder="e.g. Eicher 20.15" />
+                   <input {...register("vehicle_model", { required: "Vehicle model is required" })} className={`form-input ${errors.vehicle_model ? 'border-red-500 bg-red-50' : ''}`} placeholder="e.g. Eicher 20.15" />
+                   {errors.vehicle_model && <p className="text-[10px] text-red-500 mt-1">{errors.vehicle_model.message}</p>}
                 </div>
                 <div>
                    <label className="form-label flex items-center gap-1.5">
@@ -317,7 +327,7 @@ const VehicleFormPage = ({ mode, vehicleId }: VehicleFormPageProps) => {
                       <Settings size={14} className="text-slate-400" />
                       GPS Device ID <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded ml-1">OPT</span>
                     </label>
-                    <select {...register("gps_device")} className="form-select">
+                    <select {...register("gps_device_id")} className="form-select">
                       <option value="">Select Device</option>
                       {gps.map(g => <option key={g.id} value={g.device_id}>{g.device_id} ({g.sim_number})</option>)}
                    </select>

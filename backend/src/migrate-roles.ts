@@ -19,13 +19,13 @@ async function migrateRoles() {
     
     // 1. Add jsonb permissions array to roles table (if it doesn't exist)
     await client.query(`
-      ALTER TABLE schema1.institute_roles 
+      ALTER TABLE institute.institute_roles 
       ADD COLUMN IF NOT EXISTS permissions JSONB DEFAULT '[]'::jsonb;
     `);
 
     // 2. Drop the junction table and permissions table 
-    await client.query(`DROP TABLE IF EXISTS schema1.institute_role_permissions CASCADE;`);
-    await client.query(`DROP TABLE IF EXISTS schema1.institute_permissions CASCADE;`);
+    await client.query(`DROP TABLE IF EXISTS institute.institute_role_permissions CASCADE;`);
+    await client.query(`DROP TABLE IF EXISTS institute.institute_permissions CASCADE;`);
 
     await client.query("COMMIT");
     console.log("Migration successful! Merged into one institute_roles table.");

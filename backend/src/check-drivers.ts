@@ -13,7 +13,7 @@ const pool = new Pool({
 async function checkTables() {
   const client = await pool.connect();
   try {
-    console.log("🔍 Checking tables in schema1...\n");
+    console.log("🔍 Checking tables in institute...\n");
 
     const tables = await client.query(`
       SELECT table_name 
@@ -29,10 +29,10 @@ async function checkTables() {
     console.log("\n--- Columns in institute_drivers ---");
     console.table(columns.rows);
 
-    const driversCount = await client.query("SELECT COUNT(*) FROM schema1.institute_drivers");
+    const driversCount = await client.query("SELECT COUNT(*) FROM institute.institute_drivers");
     console.log(`\nDrivers count: ${driversCount.rows[0].count}`);
 
-    const sampleDrivers = await client.query("SELECT * FROM schema1.institute_drivers LIMIT 2");
+    const sampleDrivers = await client.query("SELECT * FROM institute.institute_drivers LIMIT 2");
     console.log("\n--- Sample Drivers ---");
     console.table(sampleDrivers.rows);
 

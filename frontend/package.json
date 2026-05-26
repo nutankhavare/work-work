@@ -5,9 +5,21 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsc -b && vite build",
+    "build": "vite build",
+    "type-check": "tsc -b",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "pretty": "prettier --write \"src/**/*.{ts,tsx,css,json}\"",
+    "preview": "vite preview",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "src/**/*.{ts,tsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "src/**/*.{css,json}": [
+      "prettier --write"
+    ]
   },
   "dependencies": {
     "@react-google-maps/api": "^2.20.7",
@@ -35,11 +47,15 @@
     "@types/react-dom": "^19.1.9",
     "@vitejs/plugin-react": "^5.0.4",
     "autoprefixer": "^10.4.21",
+    "baseline-browser-mapping": "^2.10.28",
     "eslint": "^9.36.0",
     "eslint-plugin-react-hooks": "^5.2.0",
     "eslint-plugin-react-refresh": "^0.4.22",
     "globals": "^16.4.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^17.0.3",
     "postcss": "^8.5.6",
+    "prettier": "^3.8.3",
     "tailwindcss": "^4.1.14",
     "typescript": "~5.9.3",
     "typescript-eslint": "^8.45.0",

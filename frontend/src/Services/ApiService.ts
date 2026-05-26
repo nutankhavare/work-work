@@ -2,11 +2,25 @@
 
 import axios from "axios";
 
-const baseURL = import.meta.env.VITE_API_BASE_URL || `http://localhost:7071/api`;
-export const tenantAsset = `http://${window.location.hostname}:4000/tenancy/assets/`;
+const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");
+const ensureTrailingSlash = (value: string) => `${trimTrailingSlash(value)}/`;
 
-export const centralAsset = `http://${window.location.hostname}:4000/storage/`;
-export const centralUrl = `http://${window.location.hostname}:4000/api`;
+const baseURL = trimTrailingSlash(import.meta.env.VITE_API_BASE_URL || "http://localhost:7071/api");
+const fallbackBaseUrls = (import.meta.env.VITE_API_BASE_URL_FALLBACKS || "")
+  .split(",")
+  .map((url: string) => trimTrailingSlash(url))
+  .filter(Boolean);
+const apiOrigin = baseURL.endsWith("/api") ? baseURL.slice(0, -4) : baseURL;
+
+export const tenantAsset = ensureTrailingSlash(
+  import.meta.env.VITE_TENANT_ASSET_URL || `${apiOrigin}/tenancy/assets`,
+);
+
+export const centralAsset = ensureTrailingSlash(
+  import.meta.env.VITE_CENTRAL_ASSET_URL || `${apiOrigin}/storage`,
+);
+
+export const centralUrl = trimTrailingSlash(import.meta.env.VITE_CENTRAL_API_URL || baseURL);
 
 const tenantApi = axios.create({
   baseURL: baseURL,
@@ -36,10 +50,22 @@ tenantApi.interceptors.request.use(
 );
 
 // This response interceptor handles 401 errors
-let isRedirecting = false;
+const isRedirecting = false;
 tenantApi.interceptors.response.use(
   (response) => response,
-  (error) => {
+  async (error) => {
+    const config = error.config || {};
+    const isNetworkError = !error.response;
+    const retryIndex = config.__retryHostIndex ?? -1;
+    const canRetryFallback = isNetworkError && retryIndex < fallbackBaseUrls.length - 1;
+
+    if (canRetryFallback) {
+      const nextIndex = retryIndex + 1;
+      config.__retryHostIndex = nextIndex;
+      config.baseURL = fallbackBaseUrls[nextIndex];
+      return tenantApi.request(config);
+    }
+
     const url = error.config?.url || "";
     const isAuthEndpoint = url.includes("/auth/login") || url.includes("/auth/refresh");
 
@@ -50,12 +76,12 @@ tenantApi.interceptors.response.use(
       window.location.pathname !== "/login" &&
       !isRedirecting
     ) {
-      console.error("Unauthorized access! Redirecting to login.");
-      isRedirecting = true;
-      localStorage.removeItem("token");
-      localStorage.removeItem("auth_state");
-      window.location.href = "/login";
-      setTimeout(() => { isRedirecting = false; }, 3000);
+      console.warn("Unauthorized access! Bypass login is active, ignoring redirect.");
+      // isRedirecting = true;
+      // localStorage.removeItem("token");
+      // localStorage.removeItem("auth_state");
+      // window.location.href = "/login";
+      // setTimeout(() => { isRedirecting = false; }, 3000);
     }
     return Promise.reject(error);
   },

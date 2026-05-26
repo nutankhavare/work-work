@@ -34,7 +34,7 @@ async function runMigration() {
 
     console.log(`\n📋 Tables created in schema1:`);
     for (const row of result.rows) {
-      console.log(`   - schema1.${row.table_name}`);
+      console.log(`   - institute.${row.table_name}`);
     }
   } catch (err: any) {
     console.error("❌ Migration failed:", err.message);

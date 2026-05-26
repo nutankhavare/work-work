@@ -15,12 +15,22 @@ export interface AuthUser {
   email: string;
 }
 
+export interface OrganizationDetails {
+  id: number;
+  name: string;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  status?: string;
+}
+
 export interface AuthState {
   user: AuthUser | null;
   tenantId: string | null;
   roles: string[];
   permissions: string[];
   status: AuthStatus;
+  organization: OrganizationDetails | null;
 }
 
 export interface AuthContextValue extends AuthState {
@@ -31,6 +41,7 @@ export interface AuthContextValue extends AuthState {
     email: string;
     roles: string[];
     permissions: string[];
+    organization?: OrganizationDetails | null;
   }) => void;
   clearAuth: () => void;
   refreshMe: () => Promise<void>;
@@ -44,6 +55,7 @@ const initialState: AuthState = {
   roles: [],
   permissions: [],
   status: "unauthenticated",
+  organization: null,
 };
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -65,6 +77,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
         tenantId: payload.tenant_id,
         permissions: payload.permissions || [],
         status: "authenticated",
+        organization: payload.organization || null,
       };
 
       setState(next);
@@ -112,6 +125,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           roles: [userData.roleName || userData.role_name || "ORG_ADMIN"],
           permissions: userData.permissions || ["*"],
           tenant_id: String(userData.orgId || userData.org_id || ""),
+          organization: userData.organization || null,
         });
       }
     } catch (error: any) {
@@ -141,6 +155,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
           permissions: cached.permissions || [],
           status: "checking",
           tenantId: cached.tenantId || null,
+          organization: cached.organization || null,
         });
 
         void refreshMe();

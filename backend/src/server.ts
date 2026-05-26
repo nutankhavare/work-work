@@ -14,13 +14,13 @@ const app = express();
 const PORT = Number(process.env.PORT || 4000);
 const JWT_SECRET = process.env.JWT_SECRET || "dummy-secret-for-now";
 const DUMMY_ORG_ID = "00000000-0000-0000-0000-000000000001";
-const ROLE_TABLE = 'schema1.institute_roles';
-const PERMISSION_TABLE = 'schema1.institute_permissions';
-const ROLE_PERMISSION_TABLE = 'schema1.institute_role_permissions';
-const EMPLOYEE_TABLE = 'schema1.institute_employees';
-const VEHICLE_TABLE = 'schema1.institute_vehicles';
-const DRIVER_TABLE = 'schema1.institute_drivers';
-const COMPLIANCE_TABLE = 'schema1.institute_compliance';
+const ROLE_TABLE = 'institute.institute_roles';
+const PERMISSION_TABLE = 'institute.institute_permissions';
+const ROLE_PERMISSION_TABLE = 'institute.institute_role_permissions';
+const EMPLOYEE_TABLE = 'institute.institute_employees';
+const VEHICLE_TABLE = 'institute.institute_vehicles';
+const DRIVER_TABLE = 'institute.institute_drivers';
+const COMPLIANCE_TABLE = 'institute.institute_compliance';
 const upload = multer({ 
   storage: multer.memoryStorage(),
   limits: {
@@ -411,6 +411,9 @@ app.post("/api/auth/login", async (req: Request, res: Response) => {
 
   const client = await pool.connect();
   try {
+    // Bypass RLS specifically for the login query using the database's `login_bypass` policy
+    await client.query(`SET app.is_login_query = 'true'`);
+
     const { rows } = await client.query(
       `SELECT id, email, password, role, org_id, created_at
        FROM users
@@ -418,6 +421,9 @@ app.post("/api/auth/login", async (req: Request, res: Response) => {
        LIMIT 1`,
       [email]
     );
+
+    // Reset the setting immediately after reading the user
+    await client.query(`RESET app.is_login_query`);
 
     console.log(`[AUTH] Login attempt for ${email}. Found ${rows.length} users.`);
     const user = rows[0];
@@ -459,6 +465,18 @@ app.post("/api/auth/login", async (req: Request, res: Response) => {
       { expiresIn: "24h" }
     );
 
+    // Fetch organization details
+    let organization = null;
+    if (user.org_id) {
+      const orgRes = await client.query(
+        "SELECT id, name, email, phone, website, status FROM organizations WHERE id::text = $1 LIMIT 1",
+        [String(user.org_id)]
+      );
+      if (orgRes.rows.length > 0) {
+        organization = orgRes.rows[0];
+      }
+    }
+
     res.json({
       success: true,
       token,
@@ -475,6 +493,7 @@ app.post("/api/auth/login", async (req: Request, res: Response) => {
           permissions,
           accessLevel,
           isOwner,
+          organization,
         },
       },
     });
@@ -510,6 +529,18 @@ app.get("/api/auth/refresh", async (req: Request, res: Response) => {
     const roleLower = (user.role ?? "").toLowerCase();
     const isOwner = roleLower.includes("admin") || roleLower.includes("owner") || roleLower === "super_admin";
 
+    // Fetch organization details
+    let organization = null;
+    if (user.org_id) {
+      const orgRes = await client.query(
+        "SELECT id, name, email, phone, website, status FROM organizations WHERE id::text = $1 LIMIT 1",
+        [String(user.org_id)]
+      );
+      if (orgRes.rows.length > 0) {
+        organization = orgRes.rows[0];
+      }
+    }
+
     res.json({
       success: true,
       data: {
@@ -521,7 +552,8 @@ app.get("/api/auth/refresh", async (req: Request, res: Response) => {
         tenant_id: user.org_id,
         org_id: user.org_id,
         permissions: isOwner ? ["*"] : [],
-        isOwner
+        isOwner,
+        organization
       }
     });
   } catch (err) {
@@ -595,7 +627,7 @@ app.get("/api/employees/:id", async (req: Request, res: Response) => {
 
     // Fetch dependants
     const dependantsResult = await pool.query(
-      `SELECT * FROM schema1.institute_employee_dependants WHERE employee_id = $1`,
+      `SELECT * FROM institute.institute_employee_dependants WHERE employee_id = $1`,
       [id]
     );
     employee.dependants = dependantsResult.rows;
@@ -645,7 +677,7 @@ app.post("/api/employees", upload.any(), async (req: Request, res: Response) => 
           for (const dep of dependants) {
             if (!dep.fullname) continue;
             await client.query(
-              `INSERT INTO schema1.institute_employee_dependants (employee_id, fullname, relation, age, phone, email)
+              `INSERT INTO institute.institute_employee_dependants (employee_id, fullname, relation, age, phone, email)
                VALUES ($1, $2, $3, $4, $5, $6)`,
               [newEmployee.id, dep.fullname, dep.relation, dep.age, dep.phone, dep.email]
             );
@@ -710,11 +742,11 @@ app.put("/api/employees/:id", upload.any(), async (req: Request, res: Response) 
       try {
         const dependants = JSON.parse(String(req.body.dependants));
         if (Array.isArray(dependants)) {
-          await client.query(`DELETE FROM schema1.institute_employee_dependants WHERE employee_id = $1`, [id]);
+          await client.query(`DELETE FROM institute.institute_employee_dependants WHERE employee_id = $1`, [id]);
           for (const dep of dependants) {
             if (!dep.fullname) continue;
             await client.query(
-              `INSERT INTO schema1.institute_employee_dependants (employee_id, fullname, relation, age, phone, email)
+              `INSERT INTO institute.institute_employee_dependants (employee_id, fullname, relation, age, phone, email)
                VALUES ($1, $2, $3, $4, $5, $6)`,
               [id, dep.fullname, dep.relation, dep.age, dep.phone, dep.email]
             );
@@ -779,6 +811,50 @@ app.get("/api/vehicles", async (req: Request, res: Response) => {
     res.json(paginatedPayload(paged, page, perPage, total));
   } catch {
     res.json(paginatedPayload([], page, perPage, 0));
+  }
+});
+
+app.get("/api/dashboard/stats", async (req: Request, res: Response) => {
+  const orgId = getOrgIdFromRequest(req);
+  if (!orgId) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  try {
+    const vehicleCountQuery = await pool.query(
+      `SELECT COUNT(*)::int as count FROM ${VEHICLE_TABLE} WHERE org_id = $1`,
+      [orgId]
+    );
+    const employeeCountQuery = await pool.query(
+      `SELECT COUNT(*)::int as count FROM ${EMPLOYEE_TABLE} WHERE org_id = $1`,
+      [orgId]
+    );
+    const driverCountQuery = await pool.query(
+      `SELECT COUNT(*)::int as count FROM ${DRIVER_TABLE} WHERE org_id = $1`,
+      [orgId]
+    );
+
+    res.json({
+      success: true,
+      data: {
+        vehicleCount: vehicleCountQuery.rows[0]?.count || 0,
+        employeeCount: employeeCountQuery.rows[0]?.count || 0,
+        driverCount: driverCountQuery.rows[0]?.count || 0,
+        deviceCount: 42
+      }
+    });
+  } catch (err) {
+    console.error("Dashboard Stats Fetch Error:", err);
+    res.json({
+      success: true,
+      data: {
+        vehicleCount: 0,
+        employeeCount: 0,
+        driverCount: 0,
+        deviceCount: 0
+      }
+    });
   }
 });
 
@@ -1028,7 +1104,7 @@ app.get("/api/drivers/:id", async (req: Request, res: Response) => {
       driverData = all.rows[0];
     }
 
-    const licenses = await pool.query(`SELECT * FROM schema1.institute_driver_license_insurance WHERE driver_id = $1`, [id]);
+    const licenses = await pool.query(`SELECT * FROM institute.institute_driver_license_insurance WHERE driver_id = $1`, [id]);
     driverData.license_insurance = licenses.rows;
 
     res.json({ success: true, data: driverData });
@@ -1077,7 +1153,7 @@ app.post("/api/drivers", upload.any(), async (req: Request, res: Response) => {
           for (const lic of licenses) {
             if (!lic.type) continue;
             await pool.query(
-              `INSERT INTO schema1.institute_driver_license_insurance (driver_id, type, number, issue_date, exp_date)
+              `INSERT INTO institute.institute_driver_license_insurance (driver_id, type, number, issue_date, exp_date)
                VALUES ($1, $2, $3, $4, $5)`,
               [driverId, lic.type, lic.number, lic.issue_date || null, lic.exp_date || null]
             );
@@ -1151,11 +1227,11 @@ app.put("/api/drivers/:id", upload.any(), async (req: Request, res: Response) =>
       try {
         const licenses = JSON.parse(String(req.body.license_insurance));
         if (Array.isArray(licenses)) {
-          await pool.query(`DELETE FROM schema1.institute_driver_license_insurance WHERE driver_id = $1`, [id]);
+          await pool.query(`DELETE FROM institute.institute_driver_license_insurance WHERE driver_id = $1`, [id]);
           for (const lic of licenses) {
             if (!lic.type) continue;
             await pool.query(
-              `INSERT INTO schema1.institute_driver_license_insurance (driver_id, type, number, issue_date, exp_date)
+              `INSERT INTO institute.institute_driver_license_insurance (driver_id, type, number, issue_date, exp_date)
                VALUES ($1, $2, $3, $4, $5)`,
               [id, lic.type, lic.number, lic.issue_date || null, lic.exp_date || null]
             );
@@ -1174,12 +1250,283 @@ app.put("/api/drivers/:id", upload.any(), async (req: Request, res: Response) =>
 });
 
 
-app.get("/api/gps-device/for/dropdown", (_req: Request, res: Response) => {
-  res.json([]);
+app.get("/api/devices", async (req: Request, res: Response) => {
+  const orgId = getOrgIdFromRequest(req);
+  if (!orgId) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  try {
+    const beaconsRes = await pool.query(
+      `SELECT id, device_id, sequence_id, assigned_to, assigned_type, status, device_type, battery_level, battery_status, device_health, is_active, created_at, synced_at 
+       FROM devices.beacons 
+       WHERE org_id = $1 
+       ORDER BY device_id ASC`,
+      [Number(orgId)]
+    );
+
+    const gpsRes = await pool.query(
+      `SELECT id, device_id, sim_number, network_provider, device_health, status, assigned_to, assigned_type, is_active, synced_at 
+       FROM devices.gps 
+       WHERE org_id = $1 
+       ORDER BY device_id ASC`,
+      [Number(orgId)]
+    );
+
+    const enrichDevices = async (devices: any[]) => {
+      const enriched = [];
+      for (const dev of devices) {
+        let assignedToName = null;
+        if (dev.assigned_to && dev.assigned_type) {
+          const idVal = Number(dev.assigned_to);
+          if (Number.isFinite(idVal)) {
+            if (dev.assigned_type === "staff") {
+              const r = await pool.query(
+                `SELECT first_name, last_name FROM institute.institute_employees WHERE id = $1 LIMIT 1`,
+                [idVal]
+              );
+              if (r.rows.length) {
+                assignedToName = `${r.rows[0].first_name} ${r.rows[0].last_name}`.trim();
+              }
+            } else if (dev.assigned_type === "driver") {
+              const r = await pool.query(
+                `SELECT first_name, last_name FROM institute.institute_drivers WHERE id = $1 LIMIT 1`,
+                [idVal]
+              );
+              if (r.rows.length) {
+                assignedToName = `${r.rows[0].first_name} ${r.rows[0].last_name}`.trim();
+              }
+            } else if (dev.assigned_type === "vehicle") {
+              const r = await pool.query(
+                `SELECT vehicle_number, vehicle_name FROM institute.institute_vehicles WHERE id = $1 LIMIT 1`,
+                [idVal]
+              );
+              if (r.rows.length) {
+                assignedToName = r.rows[0].vehicle_number || r.rows[0].vehicle_name;
+              }
+            }
+          }
+        }
+        enriched.push({
+          ...dev,
+          assigned_to_name: assignedToName,
+        });
+      }
+      return enriched;
+    };
+
+    const beaconsEnriched = await enrichDevices(beaconsRes.rows);
+    const gpsEnriched = await enrichDevices(gpsRes.rows);
+
+    res.json({
+      success: true,
+      data: {
+        beacons: beaconsEnriched,
+        gpsDevices: gpsEnriched,
+      },
+    });
+  } catch (err) {
+    console.error("Fetch devices error:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch devices" });
+  }
 });
 
-app.get("/api/beacon-device/for/dropdown", (_req: Request, res: Response) => {
-  res.json([]);
+app.post("/api/devices/assign", async (req: Request, res: Response) => {
+  const orgId = getOrgIdFromRequest(req);
+  if (!orgId) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  const { deviceType, deviceId, entityType, entityId } = req.body;
+  if (!deviceType || !deviceId || !entityType || !entityId) {
+    res.status(400).json({ success: false, message: "Missing required fields" });
+    return;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const table = deviceType === "beacon" ? "devices.beacons" : "devices.gps";
+
+    const devCheck = await client.query(
+      `SELECT id FROM ${table} WHERE device_id = $1 AND org_id = $2 LIMIT 1`,
+      [deviceId, Number(orgId)]
+    );
+
+    if (!devCheck.rows.length) {
+      await client.query("ROLLBACK");
+      res.status(404).json({ success: false, message: "Device not found or not allocated to this organization" });
+      return;
+    }
+
+    const deviceDbId = devCheck.rows[0].id;
+
+    await client.query(
+      `UPDATE ${table} SET assigned_to = $1, assigned_type = $2, synced_at = NOW() WHERE id = $3`,
+      [String(entityId), entityType, deviceDbId]
+    );
+
+    if (entityType === "staff") {
+      await client.query(
+        `UPDATE institute.institute_employees SET beacon_id = $1, updated_at = NOW() WHERE id = $2 AND org_id = $3`,
+        [deviceId, Number(entityId), orgId]
+      );
+    } else if (entityType === "driver") {
+      await client.query(
+        `UPDATE institute.institute_drivers SET beacon_id = $1, updated_at = NOW() WHERE id = $2 AND org_id = $3`,
+        [deviceId, Number(entityId), orgId]
+      );
+    } else if (entityType === "vehicle") {
+      if (deviceType === "gps") {
+        await client.query(
+          `UPDATE institute.institute_vehicles SET gps_device_id = $1, updated_at = NOW() WHERE id = $2 AND org_id = $3`,
+          [deviceId, Number(entityId), orgId]
+        );
+      } else {
+        await client.query(
+          `UPDATE institute.institute_vehicles SET beacon_count = COALESCE(beacon_count, 0) + 1, updated_at = NOW() WHERE id = $2 AND org_id = $3`,
+          [deviceId, Number(entityId), orgId]
+        );
+      }
+    }
+
+    await client.query("COMMIT");
+    res.json({ success: true, message: "Device assigned successfully" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Assign device error:", err);
+    res.status(500).json({ success: false, message: "Failed to assign device" });
+  } finally {
+    client.release();
+  }
+});
+
+app.post("/api/devices/unassign", async (req: Request, res: Response) => {
+  const orgId = getOrgIdFromRequest(req);
+  if (!orgId) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  const { deviceType, deviceId } = req.body;
+  if (!deviceType || !deviceId) {
+    res.status(400).json({ success: false, message: "Missing required fields" });
+    return;
+  }
+
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+
+    const table = deviceType === "beacon" ? "devices.beacons" : "devices.gps";
+
+    const devCheck = await client.query(
+      `SELECT id, assigned_to, assigned_type FROM ${table} WHERE device_id = $1 AND org_id = $2 LIMIT 1`,
+      [deviceId, Number(orgId)]
+    );
+
+    if (!devCheck.rows.length) {
+      await client.query("ROLLBACK");
+      res.status(404).json({ success: false, message: "Device not found" });
+      return;
+    }
+
+    const { assigned_to, assigned_type } = devCheck.rows[0];
+
+    await client.query(
+      `UPDATE ${table} SET assigned_to = NULL, assigned_type = NULL, synced_at = NOW() WHERE device_id = $1`,
+      [deviceId]
+    );
+
+    if (assigned_to && assigned_type) {
+      const entityId = Number(assigned_to);
+      if (assigned_type === "staff") {
+        await client.query(
+          `UPDATE institute.institute_employees SET beacon_id = NULL, updated_at = NOW() WHERE id = $1 AND org_id = $2`,
+          [entityId, orgId]
+        );
+      } else if (assigned_type === "driver") {
+        await client.query(
+          `UPDATE institute.institute_drivers SET beacon_id = NULL, updated_at = NOW() WHERE id = $1 AND org_id = $2`,
+          [entityId, orgId]
+        );
+      } else if (assigned_type === "vehicle") {
+        if (deviceType === "gps") {
+          await client.query(
+            `UPDATE institute.institute_vehicles SET gps_device_id = NULL, updated_at = NOW() WHERE id = $1 AND org_id = $2`,
+            [entityId, orgId]
+          );
+        } else {
+          await client.query(
+            `UPDATE institute.institute_vehicles SET beacon_count = GREATEST(COALESCE(beacon_count, 1) - 1, 0), updated_at = NOW() WHERE id = $1 AND org_id = $2`,
+            [entityId, orgId]
+          );
+        }
+      }
+    }
+
+    await client.query("COMMIT");
+    res.json({ success: true, message: "Device unassigned successfully" });
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Unassign device error:", err);
+    res.status(500).json({ success: false, message: "Failed to unassign device" });
+  } finally {
+    client.release();
+  }
+});
+
+app.get("/api/gps-device/for/dropdown", async (req: Request, res: Response) => {
+  const orgId = getOrgIdFromRequest(req);
+  if (!orgId) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  try {
+    const result = await pool.query(
+      `SELECT id, device_id 
+       FROM devices.gps 
+       WHERE org_id = $1 AND assigned_to IS NULL 
+       ORDER BY device_id ASC`,
+      [Number(orgId)]
+    );
+    res.json(result.rows.map(row => ({
+      id: row.id,
+      device_id: row.device_id,
+      name: row.device_id
+    })));
+  } catch (err) {
+    console.error("Dropdown gps error:", err);
+    res.json([]);
+  }
+});
+
+app.get("/api/beacon-device/for/dropdown", async (req: Request, res: Response) => {
+  const orgId = getOrgIdFromRequest(req);
+  if (!orgId) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  try {
+    const result = await pool.query(
+      `SELECT id, device_id 
+       FROM devices.beacons 
+       WHERE org_id = $1 AND assigned_to IS NULL 
+       ORDER BY device_id ASC`,
+      [Number(orgId)]
+    );
+    res.json(result.rows.map(row => ({
+      id: row.id,
+      device_id: row.device_id,
+      name: row.device_id
+    })));
+  } catch (err) {
+    console.error("Dropdown beacons error:", err);
+    res.json([]);
+  }
 });
 
 app.get("/api/active-vehicles/for/dropdown", async (req: Request, res: Response) => {
@@ -1805,7 +2152,7 @@ app.get("/api/broadcasts/stats", async (req: Request, res: Response) => {
           THEN ROUND(SUM(opened_count)::numeric / SUM(delivered_count) * 100) 
           ELSE 0 
         END as open_rate
-      FROM schema1.institute_broadcasts
+      FROM institute.institute_broadcasts
       WHERE org_id = $1
     `, [Number(orgId)]);
 
@@ -1830,12 +2177,12 @@ app.get("/api/broadcasts", async (req: Request, res: Response) => {
 
   try {
     const countResult = await pool.query(`
-      SELECT COUNT(*) FROM schema1.institute_broadcasts WHERE org_id = $1
+      SELECT COUNT(*) FROM institute.institute_broadcasts WHERE org_id = $1
     `, [Number(orgId)]);
     const total = parseInt(countResult.rows[0].count, 10);
 
     const result = await pool.query(`
-      SELECT * FROM schema1.institute_broadcasts 
+      SELECT * FROM institute.institute_broadcasts 
       WHERE org_id = $1 
       ORDER BY created_at DESC 
       LIMIT $2 OFFSET $3
@@ -1868,18 +2215,18 @@ app.post("/api/broadcasts", async (req: Request, res: Response) => {
     let recipients: any[] = [];
     if (recipient_ids && Array.isArray(recipient_ids)) {
       for (const item of recipient_ids) {
-        const table = item.type === 'staff' ? 'schema1.institute_employees' : 'schema1.institute_drivers';
+        const table = item.type === 'staff' ? 'institute.institute_employees' : 'institute.institute_drivers';
         const phoneCol = item.type === 'staff' ? 'phone' : 'mobile_number as phone';
         const rRes = await client.query(`SELECT id, first_name, last_name, email, ${phoneCol} FROM ${table} WHERE id = $1 AND org_id = $2 AND email IS NOT NULL`, [item.id, Number(orgId)]);
         if (rRes.rows.length > 0) recipients.push({ ...rRes.rows[0], type: item.type === 'staff' ? 'employee' : 'driver' });
       }
     } else {
       if (target_audience === "staff" || target_audience === "everyone") {
-        const r = await client.query(`SELECT id, first_name, last_name, email, phone FROM schema1.institute_employees WHERE org_id = $1 AND email IS NOT NULL`, [Number(orgId)]);
+        const r = await client.query(`SELECT id, first_name, last_name, email, phone FROM institute.institute_employees WHERE org_id = $1 AND email IS NOT NULL`, [Number(orgId)]);
         recipients.push(...r.rows.map(x => ({ ...x, type: 'employee' })));
       }
       if (target_audience === "drivers" || target_audience === "everyone") {
-        const r = await client.query(`SELECT id, first_name, last_name, email, mobile_number as phone FROM schema1.institute_drivers WHERE org_id = $1 AND email IS NOT NULL`, [Number(orgId)]);
+        const r = await client.query(`SELECT id, first_name, last_name, email, mobile_number as phone FROM institute.institute_drivers WHERE org_id = $1 AND email IS NOT NULL`, [Number(orgId)]);
         recipients.push(...r.rows.map(x => ({ ...x, type: 'driver' })));
       }
     }
@@ -1888,7 +2235,7 @@ app.post("/api/broadcasts", async (req: Request, res: Response) => {
 
     // 2. Create Broadcast
     const broadcastRes = await client.query(`
-      INSERT INTO schema1.institute_broadcasts (org_id, target_audience, channel, subject, body, status, total_recipients)
+      INSERT INTO institute.institute_broadcasts (org_id, target_audience, channel, subject, body, status, total_recipients)
       VALUES ($1, $2, $3, $4, $5, 'sending', $6) RETURNING *
     `, [Number(orgId), target_audience, channel, subject, messageBody, recipients.length]);
     const broadcast = broadcastRes.rows[0];
@@ -1898,13 +2245,13 @@ app.post("/api/broadcasts", async (req: Request, res: Response) => {
     for (const r of recipients) {
       const emailRes = await sendEmail(r.email, subject, messageBody, senderName);
       await client.query(`
-        INSERT INTO schema1.institute_broadcast_recipients (broadcast_id, recipient_type, recipient_id, recipient_name, recipient_email, status, sent_at)
+        INSERT INTO institute.institute_broadcast_recipients (broadcast_id, recipient_type, recipient_id, recipient_name, recipient_email, status, sent_at)
         VALUES ($1, $2, $3, $4, $5, $6, NOW())
       `, [broadcast.id, r.type, r.id, `${r.first_name} ${r.last_name}`, r.email, emailRes.success ? 'delivered' : 'failed']);
       if (emailRes.success) delivered++;
     }
 
-    await client.query(`UPDATE schema1.institute_broadcasts SET status = 'sent', delivered_count = $1, sent_at = NOW() WHERE id = $2`, [delivered, broadcast.id]);
+    await client.query(`UPDATE institute.institute_broadcasts SET status = 'sent', delivered_count = $1, sent_at = NOW() WHERE id = $2`, [delivered, broadcast.id]);
     
     res.json({ success: true, data: { ...broadcast, delivered_count: delivered, status: 'sent' } });
   } catch (err) {

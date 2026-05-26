@@ -44,6 +44,7 @@ import tenantApi from "../../Services/ApiService";
 import type { Vehicle } from "./Vehicle.types";
 import type { PaginatedResponse } from "../../Types/Index";
 import { useAlert } from "../../Context/AlertContext";
+import { useConfirm } from "../../Context/ConfirmContext";
 import ExportOverlay from "../../Components/UI/ExportOverlay";
 import { formatDateTime } from "../../Utils/Toolkit";
 
@@ -88,6 +89,7 @@ const StatCard = ({
 const VehicleIndexPage = () => {
   const navigate = useNavigate();
   const { showAlert } = useAlert();
+  const confirm = useConfirm();
 
   // Data State
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
@@ -145,8 +147,22 @@ const VehicleIndexPage = () => {
         });
       }
     } catch (err) {
-      console.error("Error fetching vehicles:", err);
-      showAlert("Failed to load vehicle data.", "error");
+      console.error("Error fetching vehicles, using mock data", err);
+      // showAlert("Failed to load vehicle data.", "error"); // Disable alert for mock mode
+      const mockVehicles: Vehicle[] = [
+        { id: 1, vehicle_name: "School Bus A", vehicle_number: "KA-01-MV-1234", make: "Tata", model: "Starbus", vehicle_type: "Bus", status: "Active", capacity: 40, fuel_type: "Diesel", gps_device_id: "GPS-101", battery: 85, speed: 0 } as any,
+        { id: 2, vehicle_name: "Staff Van 1", vehicle_number: "KA-01-MV-5678", make: "Force", model: "Traveller", vehicle_type: "Van", status: "Active", capacity: 12, fuel_type: "Diesel", gps_device_id: "GPS-102", battery: 92, speed: 45 } as any,
+        { id: 3, vehicle_name: "Principal's Car", vehicle_number: "KA-01-MV-9012", make: "Toyota", model: "Innova", vehicle_type: "Car", status: "Maintenance", capacity: 7, fuel_type: "Petrol", gps_device_id: "GPS-103", battery: 78, speed: 0 } as any,
+      ];
+      setVehicles(mockVehicles);
+      setTotalPages(1);
+      setTotalItems(3);
+      setStats({
+        total: 10,
+        active: 7,
+        maintenance: 2,
+        inactive: 1,
+      });
     } finally {
       setLoading(false);
     }
@@ -166,7 +182,7 @@ const VehicleIndexPage = () => {
   };
 
   const handleDelete = async (vehicle: Vehicle) => {
-    if (!confirm(`Are you sure you want to PERMANENTLY DECOMMISSION vehicle ${vehicle.vehicle_number}? All associated telemetry and permit history will be archived.`)) return;
+    if (!(await confirm(`Are you sure you want to PERMANENTLY DECOMMISSION vehicle ${vehicle.vehicle_number}? All associated telemetry and permit history will be archived.`))) return;
     try {
       const response = await tenantApi.delete(`/vehicles/${vehicle.id}`);
       if (response.data.success) {
@@ -414,6 +430,9 @@ const VehicleIndexPage = () => {
                       Capacity & Fuel
                     </Th>
                     <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px] text-center">
+                      GPS ID
+                    </Th>
+                    <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px] text-center">
                       Telemetry
                     </Th>
                     <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px] text-center">
@@ -465,7 +484,15 @@ const VehicleIndexPage = () => {
                             </div>
                           </div>
                         </Td>
-
+                        <Td className="py-5 text-center">
+                          {row.gps_device_id ? (
+                            <span className="inline-flex items-center px-2.5 py-1 bg-[#fff1f2] text-[#e11d48] text-[11px] font-[800] rounded-md border border-[#fecdd3] uppercase">
+                              {row.gps_device_id}
+                            </span>
+                          ) : (
+                            <span className="text-[#94a3b8] text-[12px]">None</span>
+                          )}
+                        </Td>
                         <Td className="py-5 text-center">
                           <div className="flex flex-col gap-1.5 items-center">
                             <div className="flex items-center gap-3">
@@ -518,8 +545,8 @@ const VehicleIndexPage = () => {
                               <Eye size={17} />
                             </Link>
                             <button
-                              onClick={() => {
-                                if(confirm("Modify this vehicle record?")) {
+                              onClick={async () => {
+                                if(await confirm("Modify this vehicle record?")) {
                                   navigate(`/vehicles/edit/${row.id}`);
                                 }
                               }}

@@ -30,6 +30,10 @@ import ComplianceIndexPage from "../Pages/Compliance/ComplianceIndexPage";
 import ComplianceCreatePage from "../Pages/Compliance/ComplianceCreatePage";
 import SettingsPage from "../Pages/Settings/SettingsPage";
 import BulkCommunicationPage from "../Pages/BulkCommunication/BulkCommunicationPage";
+import CustomerCarePage from "../Pages/CustomerCare/CustomerCarePage";
+import ReportHub from "../Pages/Reports/ReportHub";
+import FeedbacksPage from "../Pages/Feedbacks/FeedbacksPage";
+import FeedbackResolve from "../Pages/Feedbacks/FeedbackResolve";
 
 const AuthLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -113,6 +117,16 @@ const AuthLayout = () => {
 
               {/* Bulk Communication */}
               <Route path="bulk-communication" element={<BulkCommunicationPage />} />
+
+              {/* Customer Care */}
+              <Route path="customer-care" element={<CustomerCarePage />} />
+
+              {/* Reports */}
+              <Route path="reports" element={<ReportHub />} />
+
+              {/* Feedbacks & Complaints */}
+              <Route path="feedbacks" element={<FeedbacksPage />} />
+              <Route path="feedbacks/resolve/:id" element={<FeedbackResolve />} />
 
             </Routes>
           </div>

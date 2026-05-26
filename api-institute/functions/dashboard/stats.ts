@@ -30,9 +30,15 @@ app.http("dashboardStats", {
         [token.org_id]
       );
 
+      const vehicleResult = await client.query(
+        `SELECT COUNT(*) FROM schema1.institute_vehicles WHERE org_id = $1 AND status = 'Active'`,
+        [token.org_id]
+      );
+
       const data = {
         employeeCount: parseInt(employeeResult.rows[0].count, 10),
         driverCount: parseInt(driverResult.rows[0].count, 10),
+        vehicleCount: parseInt(vehicleResult.rows[0].count, 10),
       };
 
       return ok(data);

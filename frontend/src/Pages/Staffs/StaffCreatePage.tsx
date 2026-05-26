@@ -10,9 +10,10 @@ import LoadingSpinner from "../../Components/UI/LoadingSpinner";
 import PageHeader from "../../Components/UI/PageHeader";
 import tenantApi from "../../Services/ApiService";
 import { useAlert } from "../../Context/AlertContext";
+import { useConfirm } from "../../Context/ConfirmContext";
 import InfoTooltip from "../../Components/UI/InfoTooltip";
 import type { Dependant, Employee, Role } from "./Staff.types";
-import type { StateDistrict } from "../../Types/Index";
+import type { BeaconDevice, StateDistrict } from "../../Types/Index";
 
 const FormSection = ({ title, icon, children, color = "var(--primary)" }: any) => (
   <div className="form-card">
@@ -29,12 +30,14 @@ const FormSection = ({ title, icon, children, color = "var(--primary)" }: any) =
 const StaffCreatePage = () => {
   const navigate = useNavigate();
   const { showAlert } = useAlert();
+  const confirm = useConfirm();
 
   // State
   const [loading, setLoading] = useState(true);
   const [allRoles, setAllRoles] = useState<Role[]>([]);
   const [states, setStates] = useState<StateDistrict[]>([]);
   const [districts, setDistricts] = useState<StateDistrict[]>([]);
+  const [beacons, setBeacons] = useState<BeaconDevice[]>([]);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
 
   const {
@@ -62,13 +65,15 @@ const StaffCreatePage = () => {
     const fetchInitialData = async () => {
       try {
         setLoading(true);
-        const [rolesRes, statesRes] = await Promise.all([
+        const [rolesRes, statesRes, beaconsRes] = await Promise.all([
           tenantApi.get("/roles"),
-          tenantApi.get(`/masters/forms/dropdowns/states`)
+          tenantApi.get(`/masters/forms/dropdowns/states`),
+          tenantApi.get(`/beacon-device/for/dropdown`)
         ]);
         const rolesRaw = rolesRes.data.data;
         setAllRoles(Array.isArray(rolesRaw) ? rolesRaw : (rolesRaw?.data || []));
         setStates(Array.isArray(statesRes.data) ? statesRes.data : statesRes.data?.data || []);
+        setBeacons(Array.isArray(beaconsRes.data) ? beaconsRes.data : beaconsRes.data?.data || []);
       } catch (err) {
         showAlert("Failed to load form data.", "error");
       } finally {
@@ -109,8 +114,12 @@ const StaffCreatePage = () => {
     }
   }, [pinCode, states, setValue]);
 
+  const onInvalid = () => {
+    showAlert("Please fill in all mandatory fields correctly.", "error");
+  };
+
   const onSubmit: SubmitHandler<Employee> = async (data) => {
-    if (!confirm("Are you sure you want to save this employee record?")) return;
+    if (!(await confirm("Are you sure you want to save this employee record?"))) return;
     
     try {
       const formData = new FormData();
@@ -148,7 +157,7 @@ const StaffCreatePage = () => {
       />
 
       <div className="max-w-[860px] mx-auto px-4 sm:px-0">
-        <form onSubmit={handleSubmit(onSubmit)}>
+        <form onSubmit={handleSubmit(onSubmit, onInvalid)}>
           
           {/* BASIC INFO */}
           <FormSection title="Basic Information" icon="person">
@@ -189,7 +198,7 @@ const StaffCreatePage = () => {
                     <span className="material-symbols-outlined text-[14px]">badge</span>
                     Employee ID
                   </label>
-                  <input {...register("employee_id")} className="form-input" placeholder="EMP-1001" />
+                  <input {...register("employee_id", { required: "Employee ID is required" })} className={`form-input ${errors.employee_id ? 'border-red-500 bg-red-50' : ''}`} placeholder="EMP-1001" />
                   {errors.employee_id && <p className="text-[10px] text-red-500 mt-1">{errors.employee_id.message}</p>}
                 </div>
                 <div>
@@ -197,14 +206,16 @@ const StaffCreatePage = () => {
                     <span className="material-symbols-outlined text-[14px]">person</span>
                     First Name
                   </label>
-                  <input {...register("first_name")} className="form-input" placeholder="John" />
+                  <input {...register("first_name", { required: "First name is required" })} className={`form-input ${errors.first_name ? 'border-red-500 bg-red-50' : ''}`} placeholder="John" />
+                  {errors.first_name && <p className="text-[10px] text-red-500 mt-1">{errors.first_name.message}</p>}
                 </div>
                 <div>
                   <label className="form-label flex items-center gap-1.5">
                     <span className="material-symbols-outlined text-[14px]">person</span>
                     Last Name
                   </label>
-                  <input {...register("last_name")} className="form-input" placeholder="Doe" />
+                  <input {...register("last_name", { required: "Last name is required" })} className={`form-input ${errors.last_name ? 'border-red-500 bg-red-50' : ''}`} placeholder="Doe" />
+                  {errors.last_name && <p className="text-[10px] text-red-500 mt-1">{errors.last_name.message}</p>}
                 </div>
                 <div>
                   <label className="form-label flex items-center gap-1.5">
@@ -281,7 +292,18 @@ const StaffCreatePage = () => {
                   <span className="material-symbols-outlined text-[14px]">call</span>
                   Mobile Number
                 </label>
-                <input {...register("phone")} className="form-input" placeholder="+91 XXXXX XXXXX" />
+                <input {...register("phone", { required: "Phone number is required", pattern: { value: /^[0-9]{10}$/, message: "Must be exactly 10 digits" } })} type="tel" maxLength={10} pattern="[0-9]{10}" className={`form-input ${errors.phone ? 'border-red-500 bg-red-50' : ''}`} placeholder="Enter 10-digit mobile number" onInput={(e) => { e.currentTarget.value = e.currentTarget.value.replace(/[^0-9]/g, '').slice(0, 10); }} />
+                {errors.phone && <p className="text-[10px] text-red-500 mt-1">{errors.phone.message}</p>}
+              </div>
+              <div>
+                 <label className="form-label flex items-center gap-1.5">
+                   <span className="material-symbols-outlined text-[14px]">sensors</span>
+                   Beacon Binding <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded ml-1">OPT</span>
+                 </label>
+                 <select {...register("beacon_id")} className="form-select">
+                   <option value="">No Binding</option>
+                   {beacons.map(b => <option key={b.id} value={b.device_id}>{b.device_id}</option>)}
+                 </select>
               </div>
             </div>
           </FormSection>
@@ -347,7 +369,7 @@ const StaffCreatePage = () => {
                    <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="form-label">Phone</label>
-                        <input {...register("primary_person_phone_1")} className="form-input" />
+                        <input {...register("primary_person_phone_1")} type="tel" maxLength={10} pattern="[0-9]{10}" className="form-input" placeholder="Enter 10-digit number" onInput={(e) => { e.currentTarget.value = e.currentTarget.value.replace(/[^0-9]/g, '').slice(0, 10); }} />
                       </div>
                       <div>
                         <label className="form-label">Email</label>
@@ -369,7 +391,7 @@ const StaffCreatePage = () => {
                    <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="form-label">Phone</label>
-                        <input {...register("secondary_person_phone_1")} className="form-input" />
+                        <input {...register("secondary_person_phone_1")} type="tel" maxLength={10} pattern="[0-9]{10}" className="form-input" placeholder="Enter 10-digit number" onInput={(e) => { e.currentTarget.value = e.currentTarget.value.replace(/[^0-9]/g, '').slice(0, 10); }} />
                       </div>
                       <div>
                         <label className="form-label">Email</label>

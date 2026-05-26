@@ -11,9 +11,9 @@ export default defineConfig({
   server: {
     proxy: {
       '/api': {
-        target: 'https://func-institue-api-ddh5hrcfajbtddfk.southindia-01.azurewebsites.net',
+        target: 'http://localhost:7071',
         changeOrigin: true,
-        secure: true,
+        secure: false,
       }
     }
   }

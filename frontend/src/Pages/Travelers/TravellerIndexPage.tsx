@@ -1,6 +1,6 @@
-// src/components/travelers/TravellerIndexPage.tsx
 import { useState, useEffect } from "react";
 import { useNavigate, Link } from "react-router-dom";
+import { motion } from "framer-motion";
 
 // Icons
 import {
@@ -19,7 +19,6 @@ import PageHeader from "../../Components/UI/PageHeader";
 import EmptyState from "../../Components/UI/EmptyState";
 import { Pagination } from "../../Components/Table/Pagination";
 import {
-  TableDiv,
   TableContainer,
   Table,
   Thead,
@@ -34,9 +33,34 @@ import tenantApi, { centralAsset } from "../../Services/ApiService";
 import type { Traveller } from "./Traveler.types";
 import type { PaginatedResponse } from "../../Types/Index";
 import { Loader } from "../../Components/UI/Loader";
+import { useConfirm } from "../../Context/ConfirmContext";
+
+/* ── STAT CARD COMPONENT ── */
+const StatCard = ({ title, value, subtext, icon: Icon, colorClass, delay = 0 }: any) => (
+  <motion.div
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.4, delay }}
+    className="bg-white rounded-[14px] p-6 border border-[#e8edf5] shadow-[0_1px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_16px_rgba(124,58,237,0.08)] transition-all group"
+  >
+    <div className="flex items-center gap-4">
+      <div className={`p-4 rounded-[12px] ${colorClass} transition-transform group-hover:scale-110`}>
+        <Icon size={24} />
+      </div>
+      <div>
+        <p className="text-[11px] font-[800] text-[#94a3b8] uppercase tracking-wider mb-1">{title}</p>
+        <div className="flex items-baseline gap-2">
+          <h4 className="text-2xl font-[900] text-[#1e293b]">{value}</h4>
+          {subtext && <span className="text-[11px] font-[700] text-[#059669]">{subtext}</span>}
+        </div>
+      </div>
+    </div>
+  </motion.div>
+);
 
 const TravellerIndexPage = () => {
   const navigate = useNavigate();
+  const confirm = useConfirm();
   // Data State
   const [allTravelers, setAllTravelers] = useState<Traveller[]>([]);
   const [displayTravelers, setDisplayTravelers] = useState<Traveller[]>([]);
@@ -86,16 +110,14 @@ const TravellerIndexPage = () => {
     fetchTravelers();
   }, [currentPage, perPage]);
 
-  // 2. Filter Logic (Client-Side for current page / Mixed)
+  // 2. Filter Logic
   useEffect(() => {
     let result = allTravelers;
 
-    // Gender Filter
     if (genderFilter) {
       result = result.filter(t => t.gender?.toLowerCase() === genderFilter.toLowerCase());
     }
 
-    // Search Filter
     if (searchQuery) {
       const lowerQuery = searchQuery.toLowerCase();
       result = result.filter((t) =>
@@ -108,13 +130,11 @@ const TravellerIndexPage = () => {
     setDisplayTravelers(result);
   }, [searchQuery, genderFilter, allTravelers]);
 
-  // 3. Handlers
   const handleClearFilters = () => {
     setSearchQuery("");
     setGenderFilter("");
   };
 
-  // Helper: Render Avatar
   const renderAvatar = (row: Traveller) => {
     const imgSrc = row.profile_photo
       ? `${centralAsset}${row.profile_photo}`
@@ -124,7 +144,7 @@ const TravellerIndexPage = () => {
       <img
         src={imgSrc}
         alt={`${row.first_name}`}
-        className="h-10 w-10 rounded-full object-cover border border-slate-200"
+        className="h-10 w-10 rounded-full object-cover border border-[#e2e8f0] shadow-sm"
         onError={(e) => {
           (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${row.first_name}+${row.last_name}&background=random`;
         }}
@@ -133,131 +153,97 @@ const TravellerIndexPage = () => {
   };
 
   return (
-    <div className="min-h-screen bg-white px-2">
-      {/* Header */}
-      <div className="mx-4">
-        <PageHeader title="Traveller Management" />
-      </div>
+    <div className="min-h-screen bg-[#F8FAFC] pb-10 font-[var(--font-manrope)]">
+      <PageHeader 
+        title="Traveller Management" 
+        icon={<Users size={18} />}
+        breadcrumb="Admin / Users / Travellers"
+      />
 
-      <div className="px-4 pb-10">
-        <div className="mx-auto space-y-4">
+      <div className="px-6">
+        {/* Stats Section */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
+            <StatCard title="Total Travellers" value={totalItems} icon={Users} colorClass="bg-blue-50 text-blue-600" />
+            <StatCard title="Male" value={allTravelers.filter(t => t.gender?.toLowerCase() === 'male').length} icon={UserRound} colorClass="bg-amber-50 text-amber-600" />
+            <StatCard title="Female" value={allTravelers.filter(t => t.gender?.toLowerCase() === 'female').length} icon={UserRound} colorClass="bg-pink-50 text-pink-600" />
+            <StatCard title="Tagged" value={allTravelers.filter(t => t.beacon_id).length} icon={Bluetooth} colorClass="bg-violet-50 text-violet-600" />
+        </div>
 
-          {/* Search & Filter Card */}
-          <div className="bg-white rounded-lg shadow-sm border border-slate-100 p-6">
-           <div className="flex items-center gap-3 mb-5">
-              <div className="p-2 bg-linear-to-br from-blue-500 to-indigo-600 rounded-lg shadow-md">
-                <Search className="text-white" size={16} />
-              </div>
-              <h3 className="text-sm font-bold text-slate-800 uppercase">Search & Filter</h3>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Search */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-2 uppercase">
-                  Search Travellers
-                </label>
-                <div className="relative">
-                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={14} />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Name, UID, Beacon ID..."
-                    className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  />
-                </div>
+        {/* Main Content Card */}
+        <div className="bg-white rounded-[18px] border border-[#eef2f6] shadow-[0_2px_12px_rgba(30,41,59,0.03)] overflow-hidden">
+          
+          {/* Search & Filters */}
+          <div className="p-6 border-b border-[#f1f5f9] bg-[#fafbff]/50">
+            <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-end">
+              <div className="flex-1 relative group">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#94a3b8] group-focus-within:text-[#7c3aed] transition-colors" size={18} />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by name, UID or Beacon ID..."
+                  className="w-full pl-12 pr-4 py-[13px] bg-white border-[1.5px] border-[#e2e8f0] rounded-[12px] focus:outline-none focus:border-[#7c3aed] focus:ring-[3px] focus:ring-[rgba(124,58,237,0.08)] text-[13px] font-[500] placeholder:text-[#94a3b8] transition-all"
+                />
               </div>
 
-              {/* Gender Filter */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-2 uppercase">
-                  Gender
-                </label>
-                <div className="relative">
-                  <UserRound className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={14} />
-                  <select
-                    value={genderFilter}
-                    onChange={(e) => setGenderFilter(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm appearance-none bg-white cursor-pointer"
-                  >
-                    <option value="">All</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                    <option value="other">Other</option>
-                  </select>
-                </div>
-              </div>
-            </div>
-
-            {/* Active Filters */}
-            {(searchQuery || genderFilter) && (
-              <div className="flex items-center flex-wrap gap-1 mt-3">
-                {searchQuery && (
-                  <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold uppercase border border-blue-200">
-                    {searchQuery}
-                  </span>
-                )}
-                {genderFilter && (
-                  <span className="px-3 py-1 bg-purple-50 text-purple-700 rounded-lg text-xs font-bold uppercase border border-purple-200">
-                    {genderFilter}
-                  </span>
-                )}
-
-                <button
-                  onClick={handleClearFilters}
-                  className="px-3 py-1 bg-red-50 text-red-700 rounded-lg text-xs font-bold uppercase hover:bg-red-100 transition-all flex items-center gap-1 border border-red-200"
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:w-[400px]">
+                <select
+                  value={genderFilter}
+                  onChange={(e) => setGenderFilter(e.target.value)}
+                  className="w-full px-4 py-[13px] bg-white border-[1.5px] border-[#e2e8f0] rounded-[12px] focus:outline-none focus:border-[#7c3aed] text-[13px] font-[700] text-[#475569] appearance-none cursor-pointer hover:border-[#cbd5e1] transition-colors"
                 >
-                  <X size={14} /> Clear
-                </button>
+                  <option value="">All Genders</option>
+                  <option value="male">Male</option>
+                  <option value="female">Female</option>
+                  <option value="other">Other</option>
+                </select>
+
+                {(searchQuery || genderFilter) && (
+                  <button
+                    onClick={handleClearFilters}
+                    className="flex items-center justify-center gap-2 px-4 py-[13px] bg-red-50 text-red-600 rounded-[12px] text-[13px] font-[800] hover:bg-red-100 transition-all border border-red-100"
+                  >
+                    <X size={16} /> Clear
+                  </button>
+                )}
               </div>
-            )}
+            </div>
           </div>
 
           {/* Table Section */}
-          <TableDiv>
+          <div className="relative">
             {loading ? (
-              <div className="py-20">
-                <Loader />
-              </div>
+              <div className="py-24 flex justify-center"><Loader /></div>
             ) : displayTravelers.length === 0 ? (
-              <EmptyState
-                title="No Travellers Found"
-                description="Try adjusting your search or filters."
-                icon={<Users className="text-slate-300 mb-4" size={48} />}
-              />
+              <div className="py-24">
+                <EmptyState
+                  title="No Travellers Found"
+                  description="Try adjusting your search or filters to find what you're looking for."
+                  icon={<Users className="text-[#e2e8f0] mb-4" size={64} />}
+                />
+              </div>
             ) : (
               <>
-                <TableContainer maxHeight="71vh">
-                  <Table>
-                    <Thead>
-                      <Th width="5%">S.No</Th>
-                      <Th>Traveller Name</Th>
-                      <Th>UID</Th>
-                      <Th>Beacon ID</Th>
-                      <Th align="center">Gender</Th>
-
-                      <Th align="center">Actions</Th>
+                <TableContainer maxHeight="65vh">
+                  <Table className="w-full min-w-[1000px]">
+                    <Thead className="!bg-[#fafbff] border-b border-[#f1f5f9]">
+                      <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px] pl-8">Traveller</Th>
+                      <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px]">UID Details</Th>
+                      <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px] text-center">Beacon Tag</Th>
+                      <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px] text-center">Gender</Th>
+                      <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px] text-center pr-8">Actions</Th>
                     </Thead>
 
                     <Tbody>
-                      {displayTravelers.map((row, index) => (
-                        <Tr key={row.id}>
-                          {/* S.No */}
-                          <Td isMono className="font-bold text-slate-500">
-                            {(currentPage - 1) * Number(perPage) + index + 1}
-                          </Td>
-
-                          {/* Name & Avatar */}
-                          <Td>
-                            <div className="flex items-center gap-3">
+                      {displayTravelers.map((row) => (
+                        <Tr key={row.id} className="hover:bg-[#fdfbff] transition-colors border-b border-[#f8fafc] last:border-0">
+                          <Td className="py-5 pl-8">
+                            <div className="flex items-center gap-4">
                               {renderAvatar(row)}
                               <div>
-                                <div className="font-bold text-slate-800 uppercase text-sm">
-                                  {row.first_name} {row.last_name}
-                                </div>
+                                <p className="text-[13.5px] font-[900] text-[#1e293b] leading-tight mb-1">{row.first_name} {row.last_name}</p>
                                 {row.relationship && (
-                                  <span className="text-xs text-slate-500 font-semibold uppercase bg-slate-100 px-1.5 py-0.5 rounded">
+                                  <span className="inline-flex items-center px-2 py-0.5 bg-[#f1f5f9] rounded-[6px] text-[10px] font-[800] text-[#64748b] uppercase tracking-wider">
                                     {row.relationship}
                                   </span>
                                 )}
@@ -265,60 +251,60 @@ const TravellerIndexPage = () => {
                             </div>
                           </Td>
 
-                          <Td>
-                            <div className="flex items-center gap-2">
-                              <IdCard size={14} className="text-slate-400" />
-                              <span className="font-mono text-sm text-slate-700 font-medium">
+                          <Td className="py-5">
+                            <div className="flex items-center gap-2.5">
+                              <div className="p-1.5 bg-slate-50 rounded-lg border border-slate-100">
+                                <IdCard size={14} className="text-[#94a3b8]" />
+                              </div>
+                              <span className="text-[13px] font-[700] text-[#475569] font-mono tracking-tight">
                                 {row.traveller_uid || "—"}
                               </span>
                             </div>
                           </Td>
 
-                          {/* Beacon ID */}
-                          <Td>
+                          <Td className="py-5 text-center">
                             {row.beacon_id ? (
-                              <div className="inline-flex items-center gap-1 px-2 py-1 rounded bg-blue-50 text-blue-700 border border-blue-200">
-                                <Bluetooth size={10} />
-                                <span className="text-xs font-bold font-mono">
-                                  {row.beacon_id}
-                                </span>
-                              </div>
+                              <span className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-[#f5f3ff] text-[#7c3aed] text-[11px] font-[800] rounded-lg border border-[#ddd6fe] uppercase tracking-widest">
+                                <Bluetooth size={12} />
+                                {row.beacon_id}
+                              </span>
                             ) : (
-                              <span className="text-slate-400 text-xs italic">Not Assigned</span>
+                              <span className="text-[#94a3b8] text-[12px] italic">Not Assigned</span>
                             )}
                           </Td>
 
-                          {/* Gender */}
-                          <Td align="center">
-                            <span className="text-sm text-slate-700 capitalize">
-                              {row.gender == "Male" ? (
-                                <label className="bg-amber-100 text-amber-800 font-semibold px-4 py-1 rounded-lg">{row.gender}</label>
-                              ) : (<label className="bg-pink-50 text-pink-900 font-semibold px-4 py-1 rounded-lg">{row.gender}</label>)}
+                          <Td className="py-5 text-center">
+                            <span className={`px-4 py-1.5 rounded-full text-[10px] font-[900] uppercase tracking-widest border shadow-xs ${
+                              row.gender?.toLowerCase() === 'male' 
+                                ? 'bg-[#fff7ed] text-[#9a3412] border-[#ffedd5]' 
+                                : row.gender?.toLowerCase() === 'female'
+                                ? 'bg-[#fdf2f8] text-[#9d174d] border-[#fce7f3]'
+                                : 'bg-[#f8fafc] text-[#475569] border-[#e2e8f0]'
+                            }`}>
+                              {row.gender || "N/A"}
                             </span>
                           </Td>
 
-
-                          {/* Actions */}
-                          <Td>
-                            <div className="flex items-center justify-center gap-2">
+                          <Td className="py-5 text-center pr-8">
+                            <div className="flex items-center justify-center gap-1.5">
                               <Link
                                 to={`/travellers/show/${row.id}`}
-                                className="p-2 rounded-lg border border-purple-200 bg-purple-50 text-purple-600 hover:bg-purple-600 hover:text-white transition-all duration-200 shadow-sm"
+                                className="p-2 text-[#64748b] hover:text-[#7c3aed] hover:bg-[#ede9fe] rounded-[10px] transition-all"
                                 title="View Details"
                               >
-                                <Eye size={14} />
+                                <Eye size={17} />
                               </Link>
 
                               <button
-                                onClick={() => {
-                                  if(confirm("Modify this traveller record?")) {
+                                onClick={async () => {
+                                  if(await confirm("Modify this traveller record?")) {
                                     navigate(`/travellers/edit/${row.id}`);
                                   }
                                 }}
-                                className="p-2 rounded-lg border border-blue-200 bg-blue-50 text-blue-600 hover:bg-blue-600 hover:text-white transition-all duration-200 shadow-sm"
+                                className="p-2 text-[#64748b] hover:text-[#7c3aed] hover:bg-[#f5f3ff] rounded-[10px] transition-all"
                                 title="Edit"
                               >
-                                <FileEdit size={14} />
+                                <FileEdit size={16} />
                               </button>
                             </div>
                           </Td>
@@ -328,7 +314,6 @@ const TravellerIndexPage = () => {
                   </Table>
                 </TableContainer>
 
-                {/* Pagination (Conditional) */}
                 {totalPages > 0 && (
                   <Pagination
                     currentPage={currentPage}
@@ -340,8 +325,7 @@ const TravellerIndexPage = () => {
                 )}
               </>
             )}
-          </TableDiv>
-
+          </div>
         </div>
       </div>
     </div>

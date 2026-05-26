@@ -21,102 +21,215 @@ app.http("organizationMe", {
       await withTenant(client, token.org_id);
 
       if (req.method === "GET") {
-        // Read base org from public.organizations (created by super admin)
-        const baseResult = await client.query(
+        // Read base org from vanloka.organizations
+        let orgRes = await client.query(
           `SELECT id as org_id, name, type, email, phone, website,
                   registration_type, registration_no, registration_date,
                   gst_number, pan_number, tan_number, udyam_no,
                   subscription_plan, status, remarks, created_at
-           FROM public.organizations WHERE id = $1`,
-          [token.org_id]
+           FROM vanloka.organizations WHERE id::text = $1::text`,
+          [String(token.org_id)]
         );
 
-        // Read extended profile from schema1 (if institute admin has saved settings)
-        let extended: any = {};
-        try {
-          const extResult = await client.query(
-            `SELECT logo_url, address, contact, institute, documents, updated_at
-             FROM schema1.institute_organizations WHERE org_id::text = $1::text`,
-            [String(token.org_id)]
-          );
-          if (extResult.rows.length > 0) extended = extResult.rows[0];
-        } catch { /* table may not exist or be empty */ }
+        if (orgRes.rows.length === 0) {
+          // Fallback: If not found, try to get the first one (helpful for superadmins or dev mode)
+          orgRes = await client.query("SELECT * FROM vanloka.organizations ORDER BY id ASC LIMIT 1");
+        }
 
-        if (baseResult.rows.length === 0) return err(404, "Organization profile not configured");
+        if (orgRes.rows.length === 0) {
+          return err(404, "Organization profile not configured");
+        }
+        
+        const org = orgRes.rows[0];
+        const actualOrgId = org.id || org.org_id;
 
-        // Merge base + extended
-        return ok({ ...baseResult.rows[0], ...extended });
+        // Fetch address
+        const addrRes = await client.query("SELECT * FROM vanloka.organization_address WHERE org_id::text = $1::text", [String(actualOrgId)]);
+        org.address = addrRes.rows[0] || {};
+
+        // Fetch contacts
+        const contactRes = await client.query("SELECT * FROM vanloka.organization_contacts WHERE org_id::text = $1::text", [String(actualOrgId)]);
+        org.contact = contactRes.rows[0] || {};
+
+        // Fetch institute specific info
+        const instRes = await client.query("SELECT * FROM vanloka.organization_institute WHERE org_id::text = $1::text", [String(actualOrgId)]);
+        org.institute = instRes.rows[0] || {};
+
+        // Fetch documents
+        const docRes = await client.query("SELECT * FROM vanloka.organization_documents WHERE org_id::text = $1::text", [String(actualOrgId)]);
+        org.documents = docRes.rows[0] || {};
+
+        return ok(org);
       }
 
       if (req.method === "PUT") {
         const { fields, files } = await parseMultipart(req);
         
-        let logo_url = null;
-        let pan_doc_url = null;
-        let gst_doc_url = null;
-        let registration_doc_url = null;
+        const { name, website, phone, email, gst_number, pan_number, address, contact, documents, institute } = fields;
 
-        if (files.logo) {
-          logo_url = await uploadToBlob(files.logo.buffer, files.logo.filename, files.logo.mimetype, 'organizations');
-        }
-        if (files.pan_doc) {
-          pan_doc_url = await uploadToBlob(files.pan_doc.buffer, files.pan_doc.filename, files.pan_doc.mimetype, 'organizations');
-        }
-        if (files.gst_doc) {
-          gst_doc_url = await uploadToBlob(files.gst_doc.buffer, files.gst_doc.filename, files.gst_doc.mimetype, 'organizations');
-        }
-        if (files.registration_doc) {
-          registration_doc_url = await uploadToBlob(files.registration_doc.buffer, files.registration_doc.filename, files.registration_doc.mimetype, 'organizations');
+        // Parse JSON nested payloads
+        const parsedAddress = address ? JSON.parse(address) : null;
+        const parsedContact = contact ? JSON.parse(contact) : null;
+        const parsedInstitute = institute ? JSON.parse(institute) : null;
+        const docPayload = documents ? JSON.parse(documents) : {};
+
+        // Handle file uploads (e.g. pan_card, gst_cert, registration_cert, etc.)
+        const uploadFileIfPresent = async (fileKey: string, destFolder: string) => {
+          const file = files[fileKey];
+          if (file) {
+            return await uploadToBlob(file.buffer, file.filename, file.mimetype, destFolder);
+          }
+          return null;
+        };
+
+        const pan_card_url = await uploadFileIfPresent('pan_card', 'organizations');
+        if (pan_card_url) docPayload.pan_card = pan_card_url;
+
+        const gst_cert_url = await uploadFileIfPresent('gst_cert', 'organizations');
+        if (gst_cert_url) docPayload.gst_cert = gst_cert_url;
+
+        const registration_cert_url = await uploadFileIfPresent('registration_cert', 'organizations');
+        if (registration_cert_url) docPayload.registration_cert = registration_cert_url;
+
+        const aadhaar_card_url = await uploadFileIfPresent('aadhaar_card', 'organizations');
+        if (aadhaar_card_url) docPayload.aadhaar_card = aadhaar_card_url;
+
+        const bank_proof_url = await uploadFileIfPresent('bank_proof', 'organizations');
+        if (bank_proof_url) docPayload.bank_proof = bank_proof_url;
+
+        const contract_doc_url = await uploadFileIfPresent('contract_doc', 'organizations');
+        if (contract_doc_url) docPayload.contract_doc = contract_doc_url;
+
+        const insurance_cert_url = await uploadFileIfPresent('insurance_cert', 'organizations');
+        if (insurance_cert_url) docPayload.insurance_cert = insurance_cert_url;
+
+        const safety_sop_url = await uploadFileIfPresent('safety_sop', 'organizations');
+        if (safety_sop_url) docPayload.safety_sop = safety_sop_url;
+
+        const additional_doc_url = await uploadFileIfPresent('additional_doc', 'organizations');
+        if (additional_doc_url) docPayload.additional_doc = additional_doc_url;
+
+        // Upsert logic inside transaction
+        await client.query("BEGIN");
+
+        const finalPhone = phone || parsedContact?.primary_phone;
+        const finalEmail = email || parsedContact?.primary_email;
+
+        // 1. Update basic org info in vanloka.organizations
+        await client.query(
+          `UPDATE vanloka.organizations 
+           SET name = $1, website = $2, phone = $3, email = $4, gst_number = $5, pan_number = $6 
+           WHERE id::text = $7::text`,
+          [name, website, finalPhone, finalEmail, gst_number, pan_number, String(token.org_id)]
+        );
+
+        // 2. Upsert address
+        if (parsedAddress) {
+          await client.query(
+            `INSERT INTO vanloka.organization_address (org_id, address1, address2, city, district, pincode, state)
+             VALUES ($1, $2, $3, $4, $5, $6, $7)
+             ON CONFLICT (org_id) DO UPDATE SET
+             address1 = EXCLUDED.address1,
+             address2 = EXCLUDED.address2,
+             city = EXCLUDED.city,
+             district = EXCLUDED.district,
+             pincode = EXCLUDED.pincode,
+             state = EXCLUDED.state`,
+            [Number(token.org_id), parsedAddress.address1, parsedAddress.address2, parsedAddress.city, parsedAddress.district, parsedAddress.pincode, parsedAddress.state]
+          );
         }
 
-        const address = fields.address ? JSON.parse(fields.address) : {};
-        const contact = fields.contact ? JSON.parse(fields.contact) : {};
-        const institute = fields.institute ? JSON.parse(fields.institute) : {};
+        // 3. Upsert contact
+        if (parsedContact) {
+          await client.query(
+            `INSERT INTO vanloka.organization_contacts (
+               org_id, primary_name, primary_phone, primary_email, 
+               secondary_name, secondary_phone, secondary_email,
+               emergency_name, emergency_phone
+             )
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+             ON CONFLICT (org_id) DO UPDATE SET
+             primary_name = EXCLUDED.primary_name,
+             primary_phone = EXCLUDED.primary_phone,
+             primary_email = EXCLUDED.primary_email,
+             secondary_name = EXCLUDED.secondary_name,
+             secondary_phone = EXCLUDED.secondary_phone,
+             secondary_email = EXCLUDED.secondary_email,
+             emergency_name = EXCLUDED.emergency_name,
+             emergency_phone = EXCLUDED.emergency_phone`,
+            [
+              Number(token.org_id), 
+              parsedContact.primary_name, parsedContact.primary_phone, parsedContact.primary_email,
+              parsedContact.secondary_name, parsedContact.secondary_phone, parsedContact.secondary_email,
+              parsedContact.emergency_name, parsedContact.emergency_phone
+            ]
+          );
+        }
+
+        // 4. Upsert documents
+        if (docPayload && Object.keys(docPayload).length > 0) {
+          await client.query(
+            `INSERT INTO vanloka.organization_documents (
+               org_id, pan_card, gst_cert, registration_cert, aadhaar_card, 
+               bank_proof, contract_doc, insurance_cert, safety_sop, additional_doc
+             )
+             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+             ON CONFLICT (org_id) DO UPDATE SET
+             pan_card = EXCLUDED.pan_card,
+             gst_cert = EXCLUDED.gst_cert,
+             registration_cert = EXCLUDED.registration_cert,
+             aadhaar_card = EXCLUDED.aadhaar_card,
+             bank_proof = EXCLUDED.bank_proof,
+             contract_doc = EXCLUDED.contract_doc,
+             insurance_cert = EXCLUDED.insurance_cert,
+             safety_sop = EXCLUDED.safety_sop,
+             additional_doc = EXCLUDED.additional_doc`,
+            [
+              Number(token.org_id),
+              docPayload.pan_card || null, docPayload.gst_cert || null, docPayload.registration_cert || null, docPayload.aadhaar_card || null,
+              docPayload.bank_proof || null, docPayload.contract_doc || null, docPayload.insurance_cert || null, docPayload.safety_sop || null, docPayload.additional_doc || null
+            ]
+          );
+        }
+
+        // 5. Upsert institute
+        if (parsedInstitute) {
+          const { institution_type, affiliation_board, udise_code, safety_officer_name, safety_officer_contact } = parsedInstitute;
+          await client.query(
+            `INSERT INTO vanloka.organization_institute (org_id, institution_type, affiliation_board, udise_code, safety_officer_name, safety_officer_contact)
+             VALUES ($1, $2, $3, $4, $5, $6)
+             ON CONFLICT (org_id) DO UPDATE SET
+             institution_type = EXCLUDED.institution_type,
+             affiliation_board = EXCLUDED.affiliation_board,
+             udise_code = EXCLUDED.udise_code,
+             safety_officer_name = EXCLUDED.safety_officer_name,
+             safety_officer_contact = EXCLUDED.safety_officer_contact`,
+            [Number(token.org_id), institution_type, affiliation_board, udise_code, safety_officer_name, safety_officer_contact]
+          );
+        }
+
+        await client.query("COMMIT");
+
+        // Fetch back updated details to return
+        const finalRes = await client.query(
+          `SELECT * FROM vanloka.organizations WHERE id::text = $1::text`,
+          [String(token.org_id)]
+        );
+        const updatedOrg = finalRes.rows[0];
         
-        const docsObj: any = {};
-        if (pan_doc_url) docsObj.pan_doc = pan_doc_url;
-        if (gst_doc_url) docsObj.gst_doc = gst_doc_url;
-        if (registration_doc_url) docsObj.registration_doc = registration_doc_url;
+        const finalAddr = await client.query("SELECT * FROM vanloka.organization_address WHERE org_id::text = $1::text", [String(token.org_id)]);
+        updatedOrg.address = finalAddr.rows[0] || {};
+        
+        const finalContact = await client.query("SELECT * FROM vanloka.organization_contacts WHERE org_id::text = $1::text", [String(token.org_id)]);
+        updatedOrg.contact = finalContact.rows[0] || {};
 
-        // Upsert pattern
-        const result = await client.query(`
-          INSERT INTO schema1.institute_organizations (
-            org_id, name, type, registration_no, gst_number, pan_number, 
-            status, subscription_plan, logo_url, address, contact, institute, documents
-          )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11::jsonb, $12::jsonb, $13::jsonb)
-          ON CONFLICT (org_id) DO UPDATE SET
-            name = COALESCE(EXCLUDED.name, schema1.institute_organizations.name),
-            type = COALESCE(EXCLUDED.type, schema1.institute_organizations.type),
-            registration_no = COALESCE(EXCLUDED.registration_no, schema1.institute_organizations.registration_no),
-            gst_number = COALESCE(EXCLUDED.gst_number, schema1.institute_organizations.gst_number),
-            pan_number = COALESCE(EXCLUDED.pan_number, schema1.institute_organizations.pan_number),
-            status = COALESCE(EXCLUDED.status, schema1.institute_organizations.status),
-            subscription_plan = COALESCE(EXCLUDED.subscription_plan, schema1.institute_organizations.subscription_plan),
-            logo_url = COALESCE(EXCLUDED.logo_url, schema1.institute_organizations.logo_url),
-            address = COALESCE(EXCLUDED.address, schema1.institute_organizations.address),
-            contact = COALESCE(EXCLUDED.contact, schema1.institute_organizations.contact),
-            institute = COALESCE(EXCLUDED.institute, schema1.institute_organizations.institute),
-            documents = schema1.institute_organizations.documents || EXCLUDED.documents,
-            updated_at = NOW()
-          RETURNING *
-        `, [
-          token.org_id,
-          fields.name,
-          fields.type,
-          fields.registration_no,
-          fields.gst_number,
-          fields.pan_number,
-          fields.status || 'Active',
-          fields.subscription_plan,
-          logo_url,
-          JSON.stringify(address),
-          JSON.stringify(contact),
-          JSON.stringify(institute),
-          JSON.stringify(docsObj)
-        ]);
+        const finalInst = await client.query("SELECT * FROM vanloka.organization_institute WHERE org_id::text = $1::text", [String(token.org_id)]);
+        updatedOrg.institute = finalInst.rows[0] || {};
 
-        return ok(result.rows[0]);
+        const finalDoc = await client.query("SELECT * FROM vanloka.organization_documents WHERE org_id::text = $1::text", [String(token.org_id)]);
+        updatedOrg.documents = finalDoc.rows[0] || {};
+
+        return ok(updatedOrg);
       }
 
       return err(405, "Method not allowed");

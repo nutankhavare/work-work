@@ -13,16 +13,16 @@ const pool = new Pool({
 async function checkData() {
   const client = await pool.connect();
   try {
-    console.log("🔍 Checking latest data in schema1...\n");
+    console.log("🔍 Checking latest data in institute...\n");
 
     // Check Roles
-    const roles = await client.query("SELECT id, name, description FROM schema1.institute_roles ORDER BY id DESC LIMIT 5");
+    const roles = await client.query("SELECT id, name, description FROM institute.institute_roles ORDER BY id DESC LIMIT 5");
     console.log("--- Latest 5 Roles ---");
     console.table(roles.rows.length ? roles.rows : [{ message: "No roles found" }]);
     console.log("\n");
 
     // Check Employees/Staff
-    const staff = await client.query("SELECT id, first_name, last_name, designation, email FROM schema1.institute_employees ORDER BY id DESC LIMIT 5");
+    const staff = await client.query("SELECT id, first_name, last_name, designation, email FROM institute.institute_employees ORDER BY id DESC LIMIT 5");
     console.log("--- Latest 5 Staff Members ---");
     console.table(staff.rows.length ? staff.rows : [{ message: "No staff found" }]);
     console.log("\n");

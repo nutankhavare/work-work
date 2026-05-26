@@ -283,6 +283,7 @@ const LoginFormScreen = ({ onForgot, onOtpLogin }: { onForgot: () => void; onOtp
         roles: [userData.roleName || userData.role_name || "ORG_ADMIN"],
         permissions: userData.permissions || ["*"],
         tenant_id: String(userData.orgId || userData.org_id || ""),
+        organization: userData.organization || null,
       });
       navigate("/dashboard");
     } catch (err: any) {

@@ -14,7 +14,6 @@ import DashboardPage from "./Pages/DashboardPage";
 // Protected Route Component
 const ProtectedRoute = ({ children }: any) => {
   if (!isLoggedIn()) {
-    // <-- Use the new check
     // If no user token, redirect to the login page
     return <Navigate to="/login" />;
   }
@@ -24,7 +23,6 @@ const ProtectedRoute = ({ children }: any) => {
 // Public Route Component
 const PublicRoute = ({ children }: any) => {
   if (isLoggedIn()) {
-    // <-- Use the new check
     // If user is logged in, redirect to the dashboard
     return <Navigate to="/dashboard" />;
   }

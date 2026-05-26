@@ -25,7 +25,7 @@ async function seed() {
     console.log("🌱 Seeding permissions...");
     for (const name of DEFAULT_PERMISSIONS) {
       await client.query(
-        "INSERT INTO schema1.institute_permissions (name) VALUES ($1) ON CONFLICT (name) DO NOTHING",
+        "INSERT INTO institute.institute_permissions (name) VALUES ($1) ON CONFLICT (name) DO NOTHING",
         [name]
       );
     }

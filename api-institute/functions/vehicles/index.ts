@@ -114,7 +114,7 @@ app.http("vehiclesIndex", {
         if (fields.gps_device_id) {
           try {
             await client.query(
-              `UPDATE schema1.institute_gps SET assigned_to = $1, assigned_type = 'vehicle', synced_at = NOW()
+              `UPDATE schema1.institute_gps SET assigned_to = $1, assigned_type = 'vehicle', status = 'Assigned', is_active = true, synced_at = NOW()
                WHERE device_id = $2 AND allocated_to_org = $3::text`,
               [fields.vehicle_number || result.rows[0].vehicle_number, fields.gps_device_id, String(token.org_id)]
             );

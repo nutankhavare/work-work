@@ -52,7 +52,7 @@ app.http("beaconDeviceDropdown", {
       const result = await client.query(`
         SELECT id, device_id, sequence_id, battery_level, status, assigned_to
         FROM schema1.institute_beacon
-        WHERE allocated_to_org = $1 AND is_active = true
+        WHERE allocated_to_org = $1
         ORDER BY device_id ASC
       `, [token.org_id]);
 
@@ -84,7 +84,7 @@ app.http("gpsDeviceDropdown", {
       const result = await client.query(`
         SELECT id, device_id, sim_number, status, assigned_to
         FROM schema1.institute_gps
-        WHERE allocated_to_org = $1 AND is_active = true
+        WHERE allocated_to_org = $1
         ORDER BY device_id ASC
       `, [token.org_id]);
 

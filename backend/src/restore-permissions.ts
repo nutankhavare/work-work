@@ -26,7 +26,7 @@ async function seedPermissions() {
     await client.query("BEGIN");
     
     await client.query(`
-      CREATE TABLE IF NOT EXISTS schema1.institute_permissions (
+      CREATE TABLE IF NOT EXISTS institute.institute_permissions (
         id SERIAL PRIMARY KEY,
         name VARCHAR(255) UNIQUE NOT NULL
       );
@@ -34,7 +34,7 @@ async function seedPermissions() {
 
     for (const name of DEFAULT_PERMISSIONS) {
       await client.query(
-        "INSERT INTO schema1.institute_permissions (name) VALUES ($1) ON CONFLICT (name) DO NOTHING",
+        "INSERT INTO institute.institute_permissions (name) VALUES ($1) ON CONFLICT (name) DO NOTHING",
         [name]
       );
     }

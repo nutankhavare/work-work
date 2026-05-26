@@ -1,6 +1,6 @@
-// src/components/bookings/BookingIndexPage.tsx
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
+import { motion } from "framer-motion";
 
 // Icons
 import {
@@ -11,7 +11,10 @@ import {
   Building,
   UserCircle,
   X,
-  Armchair
+  Armchair,
+  CheckCircle,
+  Clock,
+  Slash
 } from "lucide-react";
 
 // Components
@@ -19,7 +22,6 @@ import PageHeader from "../../Components/UI/PageHeader";
 import EmptyState from "../../Components/UI/EmptyState";
 import { Pagination } from "../../Components/Table/Pagination";
 import {
-  TableDiv,
   TableContainer,
   Table,
   Thead,
@@ -34,44 +36,55 @@ import tenantApi, { centralAsset } from "../../Services/ApiService";
 import type { Booking } from "./Booking.types";
 import { Loader } from "../../Components/UI/Loader";
 
-// Helper: Status Styles
+/* ── STAT CARD COMPONENT ── */
+const StatCard = ({ title, value, subtext, icon: Icon, colorClass, delay = 0 }: any) => (
+  <motion.div
+    initial={{ opacity: 0, y: 20 }}
+    animate={{ opacity: 1, y: 0 }}
+    transition={{ duration: 0.4, delay }}
+    className="bg-white rounded-[14px] p-6 border border-[#e8edf5] shadow-[0_1px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_16px_rgba(124,58,237,0.08)] transition-all group"
+  >
+    <div className="flex items-center gap-4">
+      <div className={`p-4 rounded-[12px] ${colorClass} transition-transform group-hover:scale-110`}>
+        <Icon size={24} />
+      </div>
+      <div>
+        <p className="text-[11px] font-[800] text-[#94a3b8] uppercase tracking-wider mb-1">{title}</p>
+        <div className="flex items-baseline gap-2">
+          <h4 className="text-2xl font-[900] text-[#1e293b]">{value}</h4>
+          {subtext && <span className="text-[11px] font-[700] text-[#059669]">{subtext}</span>}
+        </div>
+      </div>
+    </div>
+  </motion.div>
+);
+
 const getStatusStyles = (status: string) => {
-  switch (status) {
-    case "Approved": return "bg-green-50 text-green-700 border-green-200";
-    case "Active": return "bg-blue-50 text-blue-700 border-blue-200";
-    case "Completed": return "bg-purple-50 text-purple-700 border-purple-200";
-    case "Cancelled": return "bg-red-50 text-red-700 border-red-200";
-    default: return "bg-yellow-50 text-yellow-700 border-yellow-200";
+  const s = status?.toLowerCase();
+  switch (s) {
+    case "approved": return "bg-emerald-50 text-emerald-700 border-emerald-200";
+    case "active": return "bg-blue-50 text-blue-700 border-blue-200";
+    case "completed": return "bg-indigo-50 text-indigo-700 border-indigo-200";
+    case "cancelled": return "bg-rose-50 text-rose-700 border-rose-200";
+    default: return "bg-amber-50 text-amber-700 border-amber-200";
   }
 };
 
 const BookingIndexPage = () => {
-  // Data State
   const [allBookings, setAllBookings] = useState<Booking[]>([]);
   const [displayBookings, setDisplayBookings] = useState<Booking[]>([]);
   const [loading, setLoading] = useState(true);
-
-  // Filter State
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState("");
-
-  // Pagination State
   const [currentPage, setCurrentPage] = useState(1);
   const [perPage] = useState(10);
 
-  // 1. Fetch Data
   const fetchBookings = async () => {
     try {
       setLoading(true);
-
-      // Fetching 50 as per original logic, but we will paginate client-side for the view
       const response = await tenantApi.get("/bookings", {
-        params: {
-          per_page: 100, // Fetch a larger batch
-          status: statusFilter,
-        },
+        params: { per_page: 100, status: statusFilter }
       });
-
       if (response.data.success) {
         const bookings = response.data.data.data || [];
         setAllBookings(bookings);
@@ -88,10 +101,8 @@ const BookingIndexPage = () => {
     fetchBookings();
   }, [statusFilter]);
 
-  // 2. Filter Logic (Search)
   useEffect(() => {
     let result = allBookings;
-
     if (searchQuery) {
       const lowerQuery = searchQuery.toLowerCase();
       result = result.filter((b) =>
@@ -101,25 +112,21 @@ const BookingIndexPage = () => {
         (b.assigned_vehicle ?? "").toLowerCase().includes(lowerQuery)
       );
     }
-
     setDisplayBookings(result);
-    setCurrentPage(1); // Reset to page 1 on search
+    setCurrentPage(1);
   }, [searchQuery, allBookings]);
 
-  // 3. Pagination Logic (Client-Side Slicing)
   const indexOfLastItem = currentPage * perPage;
   const indexOfFirstItem = indexOfLastItem - perPage;
   const currentItems = displayBookings.slice(indexOfFirstItem, indexOfLastItem);
   const totalPages = Math.ceil(displayBookings.length / perPage);
 
-  // 4. Handlers
   const handleClearFilters = () => {
     setSearchQuery("");
     setStatusFilter("");
     setCurrentPage(1);
   };
 
-  // Helper: Render Avatar
   const renderAvatar = (row: Booking) => {
     const imgSrc = row.traveller_profile_photo
       ? `${centralAsset}${row.traveller_profile_photo}`
@@ -129,164 +136,150 @@ const BookingIndexPage = () => {
       <img
         src={imgSrc}
         alt="Traveller"
-        className="h-10 w-10 rounded-full object-cover border border-slate-200"
+        className="h-10 w-10 rounded-full object-cover border border-[#e2e8f0] shadow-sm"
         onError={(e) => { (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${row.traveller_first_name}+${row.traveller_last_name}&background=random`; }}
       />
     );
   };
 
   return (
-    <div className="min-h-screen bg-white px-2">
-      {/* Header */}
-      <div className="mx-4">
-        <PageHeader title="Booking Management" />
-      </div>
+    <div className="min-h-screen bg-[#F8FAFC] pb-10 font-[var(--font-manrope)]">
+      <PageHeader 
+        title="Booking Management" 
+        icon={<Armchair size={18} />}
+        breadcrumb="Admin / Fleet / Bookings"
+      />
 
-      <div className="px-4 pb-10">
-        <div className="mx-auto space-y-4">
+      <div className="px-6">
+        {/* Stats Section */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 mb-8">
+            <StatCard title="Total Bookings" value={allBookings.length} icon={Armchair} colorClass="bg-blue-50 text-blue-600" />
+            <StatCard title="Approved" value={allBookings.filter(b => b.status === 'Approved').length} icon={CheckCircle} colorClass="bg-emerald-50 text-emerald-600" />
+            <StatCard title="Pending" value={allBookings.filter(b => b.status === 'Pending').length} icon={Clock} colorClass="bg-amber-50 text-amber-600" />
+            <StatCard title="Cancelled" value={allBookings.filter(b => b.status === 'Cancelled').length} icon={Slash} colorClass="bg-rose-50 text-rose-600" />
+        </div>
 
-          {/* Search & Filter Card */}
-          <div className="bg-white rounded-lg shadow-sm border border-slate-100 p-6">
-            <div className="flex items-center gap-3 mb-5">
-              <div className="p-2 bg-linear-to-br from-blue-500 to-indigo-600 rounded-lg shadow-md">
-                <Search className="text-white" size={16} />
+        {/* Main Content Card */}
+        <div className="bg-white rounded-[18px] border border-[#eef2f6] shadow-[0_2px_12px_rgba(30,41,59,0.03)] overflow-hidden">
+          
+          {/* Search & Filters */}
+          <div className="p-6 border-b border-[#f1f5f9] bg-[#fafbff]/50">
+            <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-end">
+              <div className="flex-1 relative group">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-[#94a3b8] group-focus-within:text-[#7c3aed] transition-colors" size={18} />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search by traveller, location, vehicle..."
+                  className="w-full pl-12 pr-4 py-[13px] bg-white border-[1.5px] border-[#e2e8f0] rounded-[12px] focus:outline-none focus:border-[#7c3aed] focus:ring-[3px] focus:ring-[rgba(124,58,237,0.08)] text-[13px] font-[500] placeholder:text-[#94a3b8] transition-all"
+                />
               </div>
-              <h3 className="text-sm font-bold text-slate-800 uppercase">Search & Filter</h3>
-            </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-              {/* Search Input */}
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-2 uppercase">
-                  Search Bookings
-                </label>
-                <div className="relative">
-                  <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-slate-400" size={14} />
-                  <input
-                    type="text"
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                    placeholder="Traveller, Location, Vehicle..."
-                    className="w-full pl-10 pr-4 py-2 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 text-sm"
-                  />
-                </div>
-              </div>        
-            </div>
-
-            {/* Active Filters */}
-            {(searchQuery || statusFilter) && (
-              <div className="flex items-center flex-wrap gap-1 mt-2">
-                {searchQuery && (
-                  <span className="px-3 py-1 bg-amber-50 text-amber-700 rounded-lg text-xs font-bold uppercase border border-amber-200">
-                    {searchQuery}
-                  </span>
-                )}
-                {statusFilter && <span className="px-3 py-1 bg-blue-50 text-blue-700 rounded-lg text-xs font-bold uppercase border border-blue-200">{statusFilter}</span>}
-
-                <button
-                  onClick={handleClearFilters}
-                  className="px-3 py-1 bg-red-50 text-red-700 rounded-lg text-xs font-bold uppercase hover:bg-red-100 transition-all flex items-center gap-1 border border-red-200"
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 lg:w-[400px]">
+                <select
+                  value={statusFilter}
+                  onChange={(e) => setStatusFilter(e.target.value)}
+                  className="w-full px-4 py-[13px] bg-white border-[1.5px] border-[#e2e8f0] rounded-[12px] focus:outline-none focus:border-[#7c3aed] text-[13px] font-[700] text-[#475569] appearance-none cursor-pointer hover:border-[#cbd5e1] transition-colors"
                 >
-                  <X size={14} /> Clear
-                </button>
+                  <option value="">All Statuses</option>
+                  <option value="Approved">Approved</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Completed">Completed</option>
+                  <option value="Cancelled">Cancelled</option>
+                </select>
+
+                {(searchQuery || statusFilter) && (
+                  <button
+                    onClick={handleClearFilters}
+                    className="flex items-center justify-center gap-2 px-4 py-[13px] bg-red-50 text-red-600 rounded-[12px] text-[13px] font-[800] hover:bg-red-100 transition-all border border-red-100"
+                  >
+                    <X size={16} /> Clear
+                  </button>
+                )}
               </div>
-            )}
+            </div>
           </div>
 
-          {/* Table Section */}
-          <TableDiv>
+          <div className="relative">
             {loading ? (
-              <div className="py-20"><Loader /></div>
+              <div className="py-24 flex justify-center"><Loader /></div>
             ) : displayBookings.length === 0 ? (
-              <EmptyState
-                title="No Bookings Found.."
-                description=""
-                icon={<Armchair className="text-amber-300" size={48} />}
-              />
+              <div className="py-24">
+                <EmptyState
+                  title="No Bookings Found"
+                  description="Try adjusting your search or filters to find what you're looking for."
+                  icon={<Armchair className="text-[#e2e8f0] mb-4" size={64} />}
+                />
+              </div>
             ) : (
               <>
-                <TableContainer maxHeight="71vh">
-                  <Table>
-                    <Thead>
-                      <Th>S.No</Th>
-                      <Th>Traveller</Th>
-                      <Th>Pickup Info</Th>
-                      <Th>Vehicle</Th>
-                      <Th>Status</Th>
-
-                      <Th align="center">Actions</Th>
+                <TableContainer maxHeight="65vh">
+                  <Table className="w-full min-w-[1000px]">
+                    <Thead className="!bg-[#fafbff] border-b border-[#f1f5f9]">
+                      <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px] pl-8">Traveller</Th>
+                      <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px]">Pickup Information</Th>
+                      <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px]">Assigned Vehicle</Th>
+                      <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px] text-center">Status</Th>
+                      <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px] text-center pr-8">Actions</Th>
                     </Thead>
 
                     <Tbody>
-                      {currentItems.map((row, index) => (
-                        <Tr key={row.id}>
-                          {/* S.No */}
-                          <Td isMono className="font-bold text-slate-500">
-                            {(currentPage - 1) * Number(perPage) + index + 1}
-                          </Td>
-
-                          {/* Traveller */}
-                          <Td>
-                            <div className="flex items-center gap-3">
+                      {currentItems.map((row) => (
+                        <Tr key={row.id} className="hover:bg-[#fdfbff] transition-colors border-b border-[#f8fafc] last:border-0">
+                          <Td className="py-5 pl-8">
+                            <div className="flex items-center gap-4">
                               {renderAvatar(row)}
                               <div>
-                                <div className="font-bold text-slate-800 uppercase text-sm">
-                                  {row.traveller_first_name} {row.traveller_last_name}
-                                </div>
-                                <div className="flex items-center gap-1 text-xs text-slate-500 font-semibold mt-0.5">
-                                  <UserCircle size={12} className="text-slate-400" />
+                                <p className="text-[13.5px] font-[900] text-[#1e293b] leading-tight mb-1">{row.traveller_first_name} {row.traveller_last_name}</p>
+                                <div className="flex items-center gap-1.5 text-[10.5px] font-[800] text-[#64748b] uppercase tracking-wider">
+                                  <UserCircle size={12} className="text-[#cbd5e1]" />
                                   {row.employee_id || "--"}
                                 </div>
                               </div>
                             </div>
                           </Td>
 
-                          {/* Pickup Info */}
-                          <Td>
-                            <div className="flex flex-col">
-                              <span className="flex items-center gap-1.5 font-bold text-slate-700 text-sm">
-                                <MapPin size={12} className="text-red-400" />
+                          <Td className="py-5">
+                            <div className="flex flex-col gap-1">
+                              <span className="flex items-center gap-2 text-[13px] font-[800] text-[#475569]">
+                                <MapPin size={14} className="text-rose-400" />
                                 {row.pickup_location_name}
                               </span>
-                              <span className="text-xs text-slate-500 pl-4 uppercase">
+                              <span className="text-[11px] font-[700] text-slate-400 pl-5 uppercase tracking-tight">
                                 {row.pickup_location_city}
                               </span>
                             </div>
                           </Td>
 
-                          {/* Transport (Org + Vehicle) */}
-                          <Td>
-                            <div className="flex flex-col gap-1">
+                          <Td className="py-5">
+                            <div className="flex flex-col gap-1.5">
+                              <div className="flex items-center gap-2 text-[12px] font-[700] text-indigo-600 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100 w-fit">
+                                <Bus size={14} />
+                                {row.assigned_vehicle || "Unassigned"}
+                              </div>
                               {row.organisation_name && (
-                                <div className="flex items-center gap-1.5 text-xs text-slate-600 font-medium uppercase">
-                                  <Building size={12} className="text-slate-400" />
+                                <div className="flex items-center gap-1.5 text-[10px] font-[800] text-slate-400 uppercase pl-1">
+                                  <Building size={12} className="text-slate-300" />
                                   {row.organisation_name}
                                 </div>
                               )}
-                              <div className="flex items-center gap-1.5 text-xs text-indigo-700 font-bold uppercase bg-indigo-50 px-2 py-0.5 rounded w-fit">
-                                <Bus size={12} />
-                                {row.assigned_vehicle || "Unassigned"}
-                              </div>
                             </div>
                           </Td>
 
-                          {/* Status */}
-                          <Td>
-                            <span className={`inline-flex items-center px-2.5 py-1 rounded-md text-xs font-bold uppercase border ${getStatusStyles(row.status)}`}>
+                          <Td className="py-5 text-center">
+                            <span className={`px-4 py-1.5 rounded-full text-[10px] font-[900] uppercase tracking-widest border shadow-xs ${getStatusStyles(row.status)}`}>
                               {row.status}
                             </span>
                           </Td>
 
-
-
-                          {/* Actions */}
-                          <Td align="center">
+                          <Td className="py-5 text-center pr-8">
                             <Link
                               to={`/bookings/show/${row.id}`}
-                              className="inline-flex p-2 rounded-lg border border-purple-200 bg-purple-50 text-purple-600 hover:bg-purple-600 hover:text-white transition-all duration-200 shadow-sm"
-                              title="View Booking"
+                              className="p-2 text-[#64748b] hover:text-[#7c3aed] hover:bg-[#ede9fe] rounded-[10px] transition-all inline-flex"
+                              title="View Details"
                             >
-                              <Eye size={14} />
+                              <Eye size={17} />
                             </Link>
                           </Td>
                         </Tr>
@@ -295,7 +288,6 @@ const BookingIndexPage = () => {
                   </Table>
                 </TableContainer>
 
-                {/* Pagination (Conditionally Rendered) */}
                 {totalPages > 0 && (
                   <Pagination
                     currentPage={currentPage}
@@ -307,8 +299,7 @@ const BookingIndexPage = () => {
                 )}
               </>
             )}
-          </TableDiv>
-
+          </div>
         </div>
       </div>
     </div>

@@ -276,7 +276,7 @@ const VehicleShowPage = () => {
                               <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-4">GPS Device binding</p>
                               <div className="flex items-center justify-between">
                                  <Field label="Device ID" value={vehicle.gps_device_id || 'NOT_BOUND'} />
-                                 <Field label="IMEI Protocol" value={vehicle.gps_device || 'U_IMEI_000'} />
+                                 <Field label="IMEI Protocol" value={vehicle.gps_device_id || 'U_IMEI_000'} />
                                  <Field label="Sync Date" value={formatDateTime(vehicle.lastGpsUpdate ?? null)} />
                               </div>
                            </div>

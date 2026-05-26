@@ -39,6 +39,9 @@ app.http("vehiclesById", {
           docUploads[key] = await uploadToBlob(file.buffer, file.filename, file.mimetype, 'vehicles');
         }
 
+        const oldVehicle = await client.query(`SELECT gps_device_id, vehicle_number FROM schema1.institute_vehicles WHERE id = $1 AND org_id = $2::text`, [vehicleId, String(token.org_id)]);
+        if (oldVehicle.rows.length === 0) return err(404, "Vehicle not found");
+
         const result = await client.query(`
           UPDATE schema1.institute_vehicles SET
             vehicle_number = COALESCE($3, vehicle_number),
@@ -106,16 +109,23 @@ app.http("vehiclesById", {
 
         // Sync GPS device
         try {
-          await client.query(
-            `UPDATE schema1.institute_gps SET assigned_to = NULL, assigned_type = NULL, synced_at = NOW()
-             WHERE assigned_to = $1 AND assigned_type = 'vehicle' AND allocated_to_org = $2::text`,
-            [result.rows[0].vehicle_number, String(token.org_id)]
-          );
-          if (fields.gps_device_id) {
+          const oldGpsId = oldVehicle.rows[0].gps_device_id;
+          const newGpsId = fields.gps_device_id;
+
+          if (oldGpsId && oldGpsId !== newGpsId) {
             await client.query(
-              `UPDATE schema1.institute_gps SET assigned_to = $1, assigned_type = 'vehicle', synced_at = NOW()
+              `UPDATE schema1.institute_gps SET assigned_to = NULL, assigned_type = NULL, status = 'Unassigned', is_active = true, synced_at = NOW()
+               WHERE device_id = $1 AND allocated_to_org = $2::text`,
+              [oldGpsId, String(token.org_id)]
+            );
+          }
+
+          if (newGpsId) {
+            const vNum = result.rows[0].vehicle_number;
+            await client.query(
+              `UPDATE schema1.institute_gps SET assigned_to = $1, assigned_type = 'vehicle', status = 'Assigned', is_active = true, synced_at = NOW()
                WHERE device_id = $2 AND allocated_to_org = $3::text`,
-              [result.rows[0].vehicle_number, fields.gps_device_id, String(token.org_id)]
+              [vNum, newGpsId, String(token.org_id)]
             );
           }
         } catch (_) { /* gps table may not have data */ }
@@ -124,12 +134,28 @@ app.http("vehiclesById", {
       }
 
       if (req.method === "DELETE") {
-        const result = await client.query(
-          `DELETE FROM schema1.institute_vehicles WHERE id = $1 AND org_id = $2::text`,
-          [vehicleId, String(token.org_id)]
-        );
-        if (result.rowCount === 0) return err(404, "Vehicle not found");
-        return ok({ deleted: true });
+        await client.query('BEGIN');
+        try {
+          const vehicle = await client.query(`SELECT gps_device_id FROM schema1.institute_vehicles WHERE id = $1 AND org_id = $2::text`, [vehicleId, String(token.org_id)]);
+          if (vehicle.rows.length > 0 && vehicle.rows[0].gps_device_id) {
+            await client.query(
+              `UPDATE schema1.institute_gps SET assigned_to = NULL, assigned_type = NULL, status = 'Unassigned', is_active = true, synced_at = NOW()
+               WHERE device_id = $1 AND allocated_to_org = $2::text`,
+              [vehicle.rows[0].gps_device_id, String(token.org_id)]
+            );
+          }
+
+          const result = await client.query(
+            `DELETE FROM schema1.institute_vehicles WHERE id = $1 AND org_id = $2::text`,
+            [vehicleId, String(token.org_id)]
+          );
+          if (result.rowCount === 0) { await client.query('ROLLBACK'); return err(404, "Vehicle not found"); }
+          await client.query('COMMIT');
+          return ok({ deleted: true });
+        } catch (txnError) {
+          await client.query('ROLLBACK');
+          throw txnError;
+        }
       }
 
       return err(405, "Method not allowed");

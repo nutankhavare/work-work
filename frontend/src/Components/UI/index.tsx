@@ -141,3 +141,27 @@ export const Pagination: React.FC<PaginationProps> = ({ info, pages, current }) 
     </div>
   </div>
 );
+
+// --- Stars Component ---
+interface StarsProps {
+  rating: number;
+  max?: number;
+}
+
+export const Stars: React.FC<StarsProps> = ({ rating, max = 5 }) => (
+  <div className="flex items-center gap-0.5">
+    {[...Array(max)].map((_, i) => (
+      <span 
+        key={i} 
+        className="material-symbols-outlined" 
+        style={{ 
+          fontSize: '14px', 
+          color: i < rating ? '#fbbf24' : '#e2e8f0',
+          fontVariationSettings: i < rating ? "'FILL' 1" : "'FILL' 0"
+        }}
+      >
+        star
+      </span>
+    ))}
+  </div>
+);

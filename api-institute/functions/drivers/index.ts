@@ -125,7 +125,7 @@ app.http("driversIndex", {
           if (fields.beacon_id) {
             try {
               await client.query(
-                `UPDATE schema1.institute_beacon SET assigned_to = $1, assigned_type = 'driver', synced_at = NOW()
+                `UPDATE schema1.institute_beacon SET assigned_to = $1, assigned_type = 'driver', status = 'Assigned', is_active = true, synced_at = NOW()
                  WHERE device_id = $2 AND allocated_to_org = $3::text`,
                 [fields.first_name + ' ' + (fields.last_name || ''), fields.beacon_id, String(token.org_id)]
               );

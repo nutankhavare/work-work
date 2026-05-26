@@ -2,9 +2,9 @@ import pool, { withRLS } from "../lib/db";
 import type { Permission, Role } from "../types/index";
 import { AppError } from "../middleware/errorHandler";
 
-const ROLE_TABLE = 'schema1.institute_roles';
-const PERMISSION_TABLE = 'schema1.institute_permissions';
-const ROLE_PERMISSION_JUNCTION = 'schema1.institute_role_permissions';
+const ROLE_TABLE = 'institute.institute_roles';
+const PERMISSION_TABLE = 'institute.institute_permissions';
+const ROLE_PERMISSION_JUNCTION = 'institute.institute_role_permissions';
 const DEFAULT_ORG_ID = "00000000-0000-0000-0000-000000000001";
 
 let schemaReady = false;
@@ -188,7 +188,7 @@ export async function getRoles(orgId: string): Promise<Role[]> {
     const result = await client.query(
       `SELECT r.id, r.org_id, r.name, r.description, r.department, r.access_level, r.status, r.created_by, r.created_at, r.updated_at,
               COALESCE(JSON_AGG(JSON_BUILD_OBJECT('id', p.id, 'name', p.name)) FILTER (WHERE p.id IS NOT NULL), '[]') as permissions,
-              (SELECT COUNT(*) FROM schema1.institute_employees WHERE org_id = $1 AND roles::jsonb @> JSONB_BUILD_ARRAY(r.name)) as assigned_users
+              (SELECT COUNT(*) FROM institute.institute_employees WHERE org_id = $1 AND roles::jsonb @> JSONB_BUILD_ARRAY(r.name)) as assigned_users
        FROM ${ROLE_TABLE} r
        LEFT JOIN ${ROLE_PERMISSION_JUNCTION} rp ON r.id = rp.role_id
        LEFT JOIN ${PERMISSION_TABLE} p ON rp.permission_id = p.id
@@ -212,7 +212,7 @@ export async function getRoleById(orgId: string, roleId: number): Promise<Role> 
     const result = await client.query(
       `SELECT r.id, r.org_id, r.name, r.description, r.department, r.access_level, r.status, r.created_by, r.created_at, r.updated_at,
               COALESCE(JSON_AGG(JSON_BUILD_OBJECT('id', p.id, 'name', p.name)) FILTER (WHERE p.id IS NOT NULL), '[]') as permissions,
-              (SELECT COUNT(*) FROM schema1.institute_employees WHERE org_id = $1 AND roles::jsonb @> JSONB_BUILD_ARRAY(r.name)) as assigned_users
+              (SELECT COUNT(*) FROM institute.institute_employees WHERE org_id = $1 AND roles::jsonb @> JSONB_BUILD_ARRAY(r.name)) as assigned_users
        FROM ${ROLE_TABLE} r
        LEFT JOIN ${ROLE_PERMISSION_JUNCTION} rp ON r.id = rp.role_id
        LEFT JOIN ${PERMISSION_TABLE} p ON rp.permission_id = p.id

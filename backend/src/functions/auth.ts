@@ -91,6 +91,18 @@ export async function login(request: HttpRequest, context: InvocationContext): P
             { expiresIn: "24h" }
         );
 
+        // Fetch organization details
+        let organization = null;
+        if (user.org_id) {
+            const orgRes = await client.query(
+                `SELECT id, name, email, phone, website, status FROM organizations WHERE id::text = $1 LIMIT 1`,
+                [String(user.org_id)]
+            );
+            if (orgRes.rows.length > 0) {
+                organization = orgRes.rows[0];
+            }
+        }
+
         return {
             status: 200,
             jsonBody: {
@@ -109,6 +121,7 @@ export async function login(request: HttpRequest, context: InvocationContext): P
                         permissions,
                         accessLevel,
                         isOwner,
+                        organization,
                     }
                 }
             }
@@ -149,6 +162,18 @@ export async function refreshMe(request: HttpRequest, context: InvocationContext
         const roleLower = (user.role ?? "").toLowerCase();
         const isOwner = roleLower.includes("admin") || roleLower.includes("owner") || roleLower === "super_admin";
 
+        // Fetch organization details
+        let organization = null;
+        if (user.org_id) {
+            const orgRes = await client.query(
+                `SELECT id, name, email, phone, website, status FROM organizations WHERE id::text = $1 LIMIT 1`,
+                [String(user.org_id)]
+            );
+            if (orgRes.rows.length > 0) {
+                organization = orgRes.rows[0];
+            }
+        }
+
         return {
             status: 200,
             jsonBody: {
@@ -162,7 +187,8 @@ export async function refreshMe(request: HttpRequest, context: InvocationContext
                     tenant_id: user.org_id,
                     org_id: user.org_id,
                     permissions: isOwner ? ["*"] : [],
-                    isOwner
+                    isOwner,
+                    organization
                 }
             }
         };

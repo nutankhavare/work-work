@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useToolkit } from "../Utils/Toolkit";
 import { logout } from "../Services/AuthService";
 import { useAuth } from "../Context/AuthContext";
+import { useConfirm } from "../Context/ConfirmContext";
 import { motion, AnimatePresence } from "framer-motion";
 
 // Lucide Icons as per Design Spec
@@ -23,7 +24,9 @@ import {
   Settings, 
   LogOut,
   ChevronRight,
-  Megaphone
+  Megaphone,
+  Headset,
+  BarChart2
 } from "lucide-react";
 
 import type { SidebarLinkType } from "../Types/Index";
@@ -41,6 +44,9 @@ const app_features = [
   "MANAGE COMPLIANCE",
   "MANAGE SETTINGS",
   "MANAGE BULK COMMUNICATION",
+  "MANAGE CUSTOMER CARE",
+  "VIEW REPORTS",
+  "MANAGE FEEDBACKS",
 ];
 
 const sidebarLinks: SidebarLinkType[] = [
@@ -116,15 +122,13 @@ const sidebarLinks: SidebarLinkType[] = [
     name: "Feedbacks", 
     path: "/feedbacks", 
     icon: <MessageSquare size={18} />, 
-    feature: "MANAGE BOOKINGS", 
-    requiredPermissions: ["view bookings"], 
+    feature: "MANAGE FEEDBACKS", 
   },
   { 
     name: "Reports", 
     path: "/reports", 
-    icon: <FileText size={18} />, 
-    feature: "MANAGE BOOKINGS", 
-    requiredPermissions: ["view bookings"], 
+    icon: <BarChart2 size={18} />, 
+    feature: "VIEW REPORTS", 
   },
   {
     name: "Compliance",
@@ -145,6 +149,12 @@ const sidebarLinks: SidebarLinkType[] = [
     icon: <Settings size={18} />, 
     feature: "MANAGE SETTINGS", 
   },
+  { 
+    name: "Customer Care", 
+    path: "/customer-care", 
+    icon: <Headset size={18} />, 
+    feature: "MANAGE CUSTOMER CARE", 
+  },
 ];
 
 interface Props {
@@ -156,6 +166,7 @@ const Sidebar = ({ isOpen, closeSidebar }: Props) => {
   const location = useLocation();
   const { canAny, roles } = useToolkit();
   const { user } = useAuth();
+  const confirm = useConfirm();
   const navigate = useNavigate();
   const isAdmin = roles.some((role: any) => ["admin", "super admin", "org_admin", "org admin"].includes(role?.toLowerCase?.()));
 
@@ -167,8 +178,8 @@ const Sidebar = ({ isOpen, closeSidebar }: Props) => {
       return canAny(link.requiredPermissions);
     });
 
-  const handleLogout = () => {
-    if (window.confirm("Are you sure you want to logout? Any unsaved changes will be lost.")) {
+  const handleLogout = async () => {
+    if (await confirm("Are you sure you want to logout? Any unsaved changes will be lost.")) {
       logout();
       navigate("/login");
     }

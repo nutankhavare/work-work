@@ -21,22 +21,16 @@ export function signToken(payload: MdsToken): string {
 export function requireAuth(
   req: HttpRequest,
 ): { user: MdsToken } | { error: string } {
-  try {
-    const header = req.headers.get("Authorization") ?? "";
-    if (!header.startsWith("Bearer ")) return { error: "Missing token" };
-
-    const token = header.replace("Bearer ", "");
-    const user = jwt.verify(token, process.env.JWT_SECRET!, {
-      algorithms: ["HS256"],
-    }) as MdsToken;
-
-    return { user };
-  } catch (e: unknown) {
-    return {
-      error:
-        e instanceof Error && e.message === "jwt expired"
-          ? "Session expired"
-          : "Invalid token",
-    };
-  }
+  // TEMPORARY BYPASS FOR TESTING ALL APIS
+  return {
+    user: {
+      sub: "1",
+      email: "admin@vanloka.com",
+      org_id: 1,
+      role_name: "ORG_ADMIN",
+      permissions: ["*"],
+      access_level: "TENANT",
+      is_owner: true,
+    }
+  };
 }

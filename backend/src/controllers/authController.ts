@@ -75,6 +75,18 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
       { expiresIn: "24h" }
     );
 
+    // Fetch organization details
+    let organization = null;
+    if (finalOrgId) {
+      const orgRes = await pool.query(
+        "SELECT id, name, email, phone, website, status FROM organizations WHERE id::text = $1 LIMIT 1",
+        [String(finalOrgId)]
+      );
+      if (orgRes.rows.length > 0) {
+        organization = orgRes.rows[0];
+      }
+    }
+
     res.json({
       success: true,
       data: {
@@ -85,6 +97,7 @@ export async function login(req: Request, res: Response, next: NextFunction): Pr
           email,
           role: "admin",
           org_id: String(finalOrgId),
+          organization,
         },
       },
     } as ApiResponse<LoginResponse>);
@@ -103,6 +116,18 @@ export async function refreshMe(req: Request, res: Response, next: NextFunction)
       throw new AppError(401, "Unauthorized");
     }
 
+    // Fetch organization details
+    let organization = null;
+    if (req.user.org_id) {
+      const orgRes = await pool.query(
+        "SELECT id, name, email, phone, website, status FROM organizations WHERE id::text = $1 LIMIT 1",
+        [String(req.user.org_id)]
+      );
+      if (orgRes.rows.length > 0) {
+        organization = orgRes.rows[0];
+      }
+    }
+
     res.json({
       success: true,
       data: {
@@ -112,6 +137,7 @@ export async function refreshMe(req: Request, res: Response, next: NextFunction)
         roles: [req.user.role],
         tenant_id: req.user.org_id,
         permissions: ["manage_fleet", "view_reports"],
+        organization,
       },
     } as ApiResponse<RefreshResponse>);
   } catch (error) {

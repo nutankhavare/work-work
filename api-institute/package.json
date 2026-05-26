@@ -6,18 +6,20 @@
   "scripts": {
     "build": "tsc && node -e \"const fs=require('fs');fs.copyFileSync('host.json','dist/host.json');fs.copyFileSync('dist-package.json','dist/package.json');console.log('✅ Files copied to dist/')\"",
     "postbuild": "cd dist && bun install --production",
+    "dev": "tsc && npx func start --script-root dist",
     "start": "func start --script-root dist",
     "type-check": "tsc --noEmit"
   },
   "dependencies": {
+    "@azure/communication-email": "^1.0.0",
     "@azure/functions": "^4.12.0",
     "@azure/storage-blob": "^12.17.0",
+    "azure-functions-core-tools": "^4.9.0",
     "bcryptjs": "^3.0.3",
     "busboy": "^1.6.0",
     "jsonwebtoken": "^9.0.3",
     "nodemailer": "^8.0.6",
-    "pg": "^8.20.0",
-    "@azure/communication-email": "^1.0.0"
+    "pg": "^8.20.0"
   },
   "devDependencies": {
     "@types/bcryptjs": "^3.0.0",

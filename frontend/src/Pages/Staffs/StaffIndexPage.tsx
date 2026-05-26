@@ -47,6 +47,7 @@ import { Pagination } from "../../Components/Table/Pagination";
 import type { Employee, Role } from "./Staff.types";
 import { DUMMY_USER_IMAGE } from "../../Utils/Toolkit";
 import ExportOverlay from "../../Components/UI/ExportOverlay";
+import { useConfirm } from "../../Context/ConfirmContext";
 
 /* ── STAT CARD COMPONENT ── */
 const StatCard = ({ title, value, subtext, icon: Icon, colorClass, delay = 0 }: any) => (
@@ -149,6 +150,7 @@ const ImportModal = ({ isOpen, onClose, onImport }: { isOpen: boolean; onClose: 
 const StaffIndexPage = () => {
   const { showAlert } = useAlert();
   const navigate = useNavigate();
+  const confirm = useConfirm();
 
   // Data State
   const [staffList, setStaffList] = useState<Employee[]>([]);
@@ -173,61 +175,57 @@ const StaffIndexPage = () => {
   const [showBulkExport, setShowBulkExport] = useState(false);
   const [individualExport, setIndividualExport] = useState<Employee | null>(null);
 
-  // 1. Fetch Data
+  // 1. Fetch data from backend
   const fetchStaff = useCallback(async () => {
+    setLoading(true);
     try {
-      setLoading(true);
-      const params: any = {
-        page: currentPage,
-        per_page: perPage,
-        ...(searchQuery && { search: searchQuery }),
-        ...(statusFilter && { status: statusFilter }),
-        ...(roleFilter && { role: roleFilter }),
-      };
+      const response = await tenantApi.get("/employees", {
+        params: {
+          page: currentPage,
+          limit: perPage,
+          search: searchQuery,
+          status: statusFilter,
+          role: roleFilter,
+        },
+      });
 
-      const response = await tenantApi.get("/employees", { params });
-      if (response.data.success) {
-        const { data, current_page, last_page, total } = response.data.data;
-        setStaffList(data);
-        setCurrentPage(current_page);
-        setTotalPages(last_page);
-        setTotalItems(total);
-        
-        // Stats Logic (Simplified dynamic calculation)
-        setStats({
-          total: total || data.length,
-          active: data.filter((s: Employee) => s.status?.toLowerCase() === 'active').length,
-          onLeave: data.filter((s: Employee) => ['leave', 'on leave', 'onleave'].includes(s.status?.toLowerCase() || "")).length,
-          inactive: data.filter((s: Employee) => s.status?.toLowerCase() === 'inactive').length
-        });
-      }
-    } catch (err: any) {
-      console.error("Error fetching staff:", err);
-      showAlert("Failed to load staff data.", "error");
+      const resData = response.data?.data;
+      const employees = resData?.data || [];
+      
+      setStaffList(employees);
+      setTotalItems(resData?.total || 0);
+      setTotalPages(resData?.last_page || 1);
+      
+      setStats({
+        total: resData?.total || 0,
+        active: employees.filter((s: any) => s.status?.toLowerCase() === "active").length || 0,
+        onLeave: employees.filter((s: any) => ["leave", "on leave", "onleave"].includes(s.status?.toLowerCase() || "")).length || 0,
+        inactive: employees.filter((s: any) => s.status?.toLowerCase() === "inactive").length || 0,
+      });
+    } catch (error) {
+      showAlert("Failed to fetch staff list", "error");
     } finally {
       setLoading(false);
     }
-  }, [currentPage, perPage, searchQuery, statusFilter, roleFilter, showAlert]);
+  }, [currentPage, perPage, searchQuery, statusFilter, roleFilter]);
+
+  const fetchRoles = useCallback(async () => {
+    try {
+      const response = await tenantApi.get("/roles");
+      setAllRoles(response.data?.data || []);
+    } catch (error) {
+      console.error("Failed to fetch roles", error);
+    }
+  }, []);
 
   useEffect(() => {
-    const timer = setTimeout(fetchStaff, 500);
+    fetchRoles();
+  }, [fetchRoles]);
+
+  useEffect(() => {
+    const timer = setTimeout(fetchStaff, 300);
     return () => clearTimeout(timer);
   }, [fetchStaff]);
-
-  useEffect(() => {
-    const fetchRoles = async () => {
-      try {
-        const response = await tenantApi.get("/roles");
-        if (response.data.success) {
-          const rolesData = response.data.data;
-          setAllRoles(Array.isArray(rolesData) ? rolesData : (rolesData?.data || []));
-        }
-      } catch (err) {
-        console.error("Error fetching roles:", err);
-      }
-    };
-    fetchRoles();
-  }, []);
 
   // 2. Handlers
   const handleClearFilters = () => {
@@ -238,13 +236,14 @@ const StaffIndexPage = () => {
   };
 
   const handleDelete = async (emp: Employee) => {
-    if (!confirm(`Delete ${emp.first_name} ${emp.last_name}? This cannot be undone.`)) return;
+    if (!(await confirm(`Delete ${emp.first_name} ${emp.last_name}? This cannot be undone.`))) return;
     try {
       await tenantApi.delete(`/employees/${emp.id}`);
       setStaffList((prev) => prev.filter((s) => s.id !== emp.id));
       showAlert(`${emp.first_name} deleted successfully.`, "success");
-    } catch (err: any) {
-      showAlert(err.response?.data?.message || "Failed to delete staff.", "error");
+      fetchStaff();
+    } catch (error) {
+      showAlert("Failed to delete employee", "error");
     }
   };
 
@@ -341,34 +340,13 @@ const StaffIndexPage = () => {
   /* ── BULK IMPORT HANDLER ── */
   const handleBulkImport = async (rows: any[]) => {
     setIsImportModalOpen(false);
-    showAlert(`Starting import of ${rows.length} records...`, "info");
-    
-    let successCount = 0;
-    let failCount = 0;
-
-    for (const row of rows) {
-      try {
-        const payload = {
-          first_name: String(row.firstName || row.first_name || row.Name?.split(' ')[0] || "New"),
-          last_name: String(row.lastName || row.last_name || row.Name?.split(' ').slice(1).join(' ') || "Staff"),
-          email: row.email || row.Email || `emp_${Math.random().toString(36).slice(2)}@school.com`,
-          phone: String(row.phone || row.Phone || row.Mobile || "0000000000"),
-          employee_id: String(row.id || row.ID || row.employee_id || `EMP-${Date.now()}`),
-          designation: row.designation || row.Role || "Support",
-          status: "active",
-          roles: ["Staff"]
-        };
-        await tenantApi.post("/employees", payload);
-        successCount++;
-      } catch {
-        failCount++;
-      }
+    try {
+      await tenantApi.post("/employees/import", { employees: rows });
+      showAlert(`Successfully imported ${rows.length} records.`, "success");
+      fetchStaff();
+    } catch (error) {
+      showAlert("Failed to import employees", "error");
     }
-
-    if (successCount > 0) showAlert(`Import Complete: ${successCount} Imported successfully.`, "success");
-    if (failCount > 0) showAlert(`${failCount} records failed to import.`, "error");
-    
-    fetchStaff(); // Refresh list
   };
 
   /* ── UTILS ── */
@@ -509,6 +487,7 @@ const StaffIndexPage = () => {
                     <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px]">Role</Th>
                     <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px]">Contact Details</Th>
                     <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px] text-center">Join Date</Th>
+                    <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px] text-center">Beacon</Th>
                     <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px] text-center">Status</Th>
                     <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px] text-center pr-8">Actions</Th>
                   </Thead>
@@ -547,6 +526,15 @@ const StaffIndexPage = () => {
                           {row.joining_date ? new Date(row.joining_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' }) : '—'}
                         </Td>
                         <Td className="py-5 text-center">
+                          {row.beacon_id ? (
+                            <span className="inline-flex items-center px-2.5 py-1 bg-[#f5f3ff] text-[#7c3aed] text-[11px] font-[800] rounded-md border border-[#ddd6fe] uppercase">
+                              {row.beacon_id}
+                            </span>
+                          ) : (
+                            <span className="text-[#94a3b8] text-[12px]">None</span>
+                          )}
+                        </Td>
+                        <Td className="py-5 text-center">
                           <span className={`px-3 py-1.5 rounded-full text-[10.5px] font-[900] uppercase tracking-wider border shadow-xs ${
                             row.status?.toLowerCase() === 'active' ? 'bg-[#ecfdf5] text-[#059669] border-[#d1fae5]' :
                             ['leave', 'on leave', 'onleave'].includes(row.status?.toLowerCase() || "") ? 'bg-[#fffbeb] text-[#d97706] border-[#fef3c7]' :
@@ -561,8 +549,8 @@ const StaffIndexPage = () => {
                                <Eye size={17} />
                              </Link>
                              <button
-                               onClick={() => {
-                                 if(confirm("Modify this employee record?")) {
+                               onClick={async () => {
+                                 if(await confirm("Modify this employee record?")) {
                                    navigate(`/staff/edit/${row.id}`);
                                  }
                                }}

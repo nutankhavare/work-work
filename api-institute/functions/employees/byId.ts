@@ -48,6 +48,9 @@ app.http("employeesById", {
         }
         const rolesJson = rolesArr.length > 0 ? JSON.stringify(rolesArr) : (fields.roles ? fields.roles : null);
 
+        const oldEmp = await client.query(`SELECT beacon_id FROM schema1.institute_employees WHERE id = $1 AND org_id = $2::text`, [employeeId, String(token.org_id)]);
+        if (oldEmp.rows.length === 0) return err(404, "Employee not found");
+
         const result = await client.query(`
           UPDATE schema1.institute_employees SET
             first_name = COALESCE($3, first_name),
@@ -77,7 +80,8 @@ app.http("employeesById", {
             photo = COALESCE($27, photo),
             roles = COALESCE($28::jsonb, roles),
             status = COALESCE($29, status),
-            remarks = COALESCE($30, remarks),
+            beacon_id = COALESCE($30, beacon_id),
+            remarks = COALESCE($31, remarks),
             updated_at = NOW()
           WHERE id = $1 AND org_id = $2::text
           RETURNING *
@@ -90,20 +94,60 @@ app.http("employeesById", {
           fields.state, fields.district, fields.city, fields.pin_code,
           fields.primary_person_name, fields.primary_person_phone_1, fields.primary_person_email,
           fields.bank_name, fields.account_holder_name, fields.account_number, fields.ifsc_code,
-          photoUrl, rolesJson, fields.status, fields.remarks
+          photoUrl, rolesJson, fields.status, fields.beacon_id, fields.remarks
         ]);
 
         if (result.rows.length === 0) return err(404, "Employee not found");
+
+        // Sync beacon
+        try {
+          const oldBeaconId = oldEmp.rows[0].beacon_id;
+          const newBeaconId = fields.beacon_id;
+
+          if (oldBeaconId && oldBeaconId !== newBeaconId) {
+            await client.query(
+              `UPDATE schema1.institute_beacon SET assigned_to = NULL, assigned_type = NULL, status = 'Unassigned', is_active = true, synced_at = NOW()
+               WHERE device_id = $1 AND allocated_to_org = $2::text`,
+              [oldBeaconId, String(token.org_id)]
+            );
+          }
+
+          if (newBeaconId) {
+            const empName = (result.rows[0].first_name || '') + ' ' + (result.rows[0].last_name || '');
+            await client.query(
+              `UPDATE schema1.institute_beacon SET assigned_to = $1, assigned_type = 'staff', status = 'Assigned', is_active = true, synced_at = NOW()
+               WHERE device_id = $2 AND allocated_to_org = $3::text`,
+              [empName, newBeaconId, String(token.org_id)]
+            );
+          }
+        } catch (_) { /* beacon table may not exist */ }
+
         return ok(result.rows[0]);
       }
 
       if (req.method === "DELETE") {
-        const result = await client.query(
-          `DELETE FROM schema1.institute_employees WHERE id = $1 AND org_id = $2::text`,
-          [employeeId, String(token.org_id)]
-        );
-        if (result.rowCount === 0) return err(404, "Employee not found");
-        return ok({ deleted: true });
+        await client.query('BEGIN');
+        try {
+          const emp = await client.query(`SELECT beacon_id FROM schema1.institute_employees WHERE id = $1 AND org_id = $2::text`, [employeeId, String(token.org_id)]);
+          if (emp.rows.length > 0 && emp.rows[0].beacon_id) {
+            await client.query(
+              `UPDATE schema1.institute_beacon SET assigned_to = NULL, assigned_type = NULL, status = 'Unassigned', is_active = true, synced_at = NOW()
+               WHERE device_id = $1 AND allocated_to_org = $2::text`,
+              [emp.rows[0].beacon_id, String(token.org_id)]
+            );
+          }
+
+          const result = await client.query(
+            `DELETE FROM schema1.institute_employees WHERE id = $1 AND org_id = $2::text`,
+            [employeeId, String(token.org_id)]
+          );
+          if (result.rowCount === 0) { await client.query('ROLLBACK'); return err(404, "Employee not found"); }
+          await client.query('COMMIT');
+          return ok({ deleted: true });
+        } catch (txnError) {
+          await client.query('ROLLBACK');
+          throw txnError;
+        }
       }
 
       return err(405, "Method not allowed");

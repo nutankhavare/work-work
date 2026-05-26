@@ -32,6 +32,7 @@ import {
 } from "../../Components/Table/Table";
 import { Pagination } from "../../Components/Table/Pagination";
 import { Loader } from "../../Components/UI/Loader";
+
 import tenantApi from "../../Services/ApiService";
 import { useAlert } from "../../Context/AlertContext";
 import {

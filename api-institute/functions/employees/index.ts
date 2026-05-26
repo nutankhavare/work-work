@@ -92,13 +92,13 @@ app.http("employeesIndex", {
             address_line_1, address_line_2, landmark, state, district, city, pin_code,
             primary_person_name, primary_person_phone_1, primary_person_email,
             bank_name, account_holder_name, account_number, ifsc_code,
-            photo, roles, status, remarks
+            photo, roles, status, beacon_id, remarks
           ) VALUES (
             $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12,
             $13, $14, $15, $16, $17, $18, $19,
             $20, $21, $22,
             $23, $24, $25, $26,
-            $27, $28::jsonb, $29, $30
+            $27, $28::jsonb, $29, $30, $31
           ) RETURNING *
         `, [
           String(token.org_id), fields.employee_id, fields.first_name, fields.last_name,
@@ -110,8 +110,19 @@ app.http("employeesIndex", {
           fields.primary_person_name, fields.primary_person_phone_1, fields.primary_person_email,
           fields.bank_name, fields.account_holder_name, fields.account_number, fields.ifsc_code,
           photoUrl, JSON.stringify(rolesArr.length > 0 ? rolesArr : (fields.roles ? [fields.roles] : [])),
-          fields.status || 'Active', fields.remarks
+          fields.status || 'Active', fields.beacon_id, fields.remarks
         ]);
+
+        // Sync beacon assignment
+        if (fields.beacon_id) {
+          try {
+            await client.query(
+              `UPDATE schema1.institute_beacon SET assigned_to = $1, assigned_type = 'staff', status = 'Assigned', is_active = true, synced_at = NOW()
+               WHERE device_id = $2 AND allocated_to_org = $3::text`,
+              [fields.first_name + ' ' + (fields.last_name || ''), fields.beacon_id, String(token.org_id)]
+            );
+          } catch (_) { /* beacon table may not have data */ }
+        }
 
         return ok(result.rows[0]);
       }

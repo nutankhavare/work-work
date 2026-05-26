@@ -21,11 +21,13 @@ import tenantApi, { centralAsset } from "../../Services/ApiService";
 import axios from "axios";
 import { DUMMY_USER_IMAGE } from "../../Utils/Toolkit";
 import SelectInputField from "../../Components/Form/SelectInputField";
+import { useConfirm } from "../../Context/ConfirmContext";
 
 const TravellerEditPage = () => {
     const { id } = useParams<{ id: string }>();
     const navigate = useNavigate();
     const { showAlert } = useAlert();
+    const confirm = useConfirm();
 
     // State
     const [loading, setLoading] = useState(true);
@@ -86,7 +88,7 @@ const TravellerEditPage = () => {
 
     // 2. Submit Handler
     const onSubmit: SubmitHandler<TravellerForm> = async (data) => {
-        if (!confirm("Are you sure you want to save changes to this traveller record?")) return;
+        if (!(await confirm("Are you sure you want to save changes to this traveller record?"))) return;
         try {
             const formData = new FormData();
 

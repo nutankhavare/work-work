@@ -318,6 +318,7 @@ const StaffShowPage = () => {
                   <Field label="Marital Status" value={staff.marital_status} />
                   <Field label="Mobile" value={staff.phone} />
                   <Field label="Official Email" value={staff.email} />
+                  <Field label="Assigned Beacon ID" value={staff.beacon_id} />
                 </SectionCard>
 
                 {/* Professional Info */}
