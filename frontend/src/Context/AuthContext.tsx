@@ -1,10 +1,4 @@
-import React, {
-  createContext,
-  useCallback,
-  useContext,
-  useEffect,
-  useState,
-} from "react";
+import React, { createContext, useCallback, useContext, useEffect, useState } from "react";
 import tenantApi from "../Services/ApiService";
 
 export type AuthStatus = "unauthenticated" | "authenticated" | "checking";
@@ -60,37 +54,32 @@ const initialState: AuthState = {
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
-export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
-  children,
-}) => {
+export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [state, setState] = useState<AuthState>(initialState);
 
-  const setAuthFromMe: AuthContextValue["setAuthFromMe"] = useCallback(
-    (payload) => {
-      const next: AuthState = {
-        user: {
-          id: payload.id,
-          name: payload.name,
-          email: payload.email,
-        },
-        roles: payload.roles || [],
-        tenantId: payload.tenant_id,
-        permissions: payload.permissions || [],
-        status: "authenticated",
-        organization: payload.organization || null,
-      };
+  const setAuthFromMe: AuthContextValue["setAuthFromMe"] = useCallback((payload) => {
+    const next: AuthState = {
+      user: {
+        id: payload.id,
+        name: payload.name,
+        email: payload.email,
+      },
+      roles: payload.roles || [],
+      tenantId: payload.tenant_id,
+      permissions: payload.permissions || [],
+      status: "authenticated",
+      organization: payload.organization || null,
+    };
 
-      setState(next);
-      try {
-        if (typeof window !== "undefined") {
-          window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next));
-        }
-      } catch {
-        // ignore storage errors
+    setState(next);
+    try {
+      if (typeof window !== "undefined") {
+        window.localStorage.setItem(AUTH_STORAGE_KEY, JSON.stringify(next));
       }
-    },
-    [],
-  );
+    } catch {
+      // ignore storage errors
+    }
+  }, []);
 
   const clearAuth: AuthContextValue["clearAuth"] = useCallback(() => {
     setState(initialState);
@@ -135,8 +124,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
       }
     }
   }, [clearAuth, setAuthFromMe]);
-
-
 
   // Initial hydration from localStorage
   useEffect(() => {

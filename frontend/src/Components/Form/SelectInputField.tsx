@@ -30,15 +30,12 @@ const SelectInputField = ({
   ClassName = "", // NEW
 }: SelectInputFieldProps) => {
   // Handle required as boolean or custom message
-  const requiredRule = typeof required === 'string' 
-    ? required 
-    : required 
-    ? `${label} is required` 
-    : false;
+  const requiredRule =
+    typeof required === "string" ? required : required ? `${label} is required` : false;
 
   // Safely access the specific error message for this field (supports nested like dependants.0.relation)
   const getNestedError = (obj: any, path: string) => {
-    return path.split('.').reduce((acc, part) => acc && acc[part], obj);
+    return path.split(".").reduce((acc, part) => acc && acc[part], obj);
   };
   const errorMessage = getNestedError(errors, name)?.message;
 
@@ -62,9 +59,7 @@ const SelectInputField = ({
           </option>
         ))}
       </select>
-      {errorMessage && (
-        <span className="text-red-500 text-xs mt-1">{String(errorMessage)}</span>
-      )}
+      {errorMessage && <span className="text-red-500 text-xs mt-1">{String(errorMessage)}</span>}
     </div>
   );
 };

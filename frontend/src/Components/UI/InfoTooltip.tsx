@@ -1,26 +1,24 @@
-import React, { useState } from 'react';
-import { Info } from 'lucide-react';
-import { motion, AnimatePresence } from 'framer-motion';
+import React, { useState } from "react";
+import { Info } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
 
 interface InfoTooltipProps {
   message?: string;
 }
 
-const InfoTooltip: React.FC<InfoTooltipProps> = ({ 
-  message = "Max 5MB. PDF, JPG, PNG, WEBP" 
-}) => {
+const InfoTooltip: React.FC<InfoTooltipProps> = ({ message = "Max 5MB. PDF, JPG, PNG, WEBP" }) => {
   const [visible, setVisible] = useState(false);
 
   return (
     <div className="relative inline-flex items-center ml-1.5 group">
-      <div 
+      <div
         onMouseEnter={() => setVisible(true)}
         onMouseLeave={() => setVisible(false)}
         className="cursor-help text-slate-300 group-hover:text-primary transition-colors"
       >
         <Info size={12} />
       </div>
-      
+
       <AnimatePresence>
         {visible && (
           <motion.div

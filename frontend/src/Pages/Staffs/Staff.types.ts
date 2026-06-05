@@ -16,7 +16,7 @@ export interface Employee {
   email: string;
   phone: string;
 
-  dependants: Dependant[]; // if marital status selected then add dependant details 
+  dependants: Dependant[]; // if marital status selected then add dependant details
 
   // Address
   address_line_1: string;
@@ -56,21 +56,19 @@ export interface Employee {
   beacon_id?: string;
   department?: string;
   user?: {
-        roles: Array<{
-            name: string;
-        }>;
-    };
+    roles: Array<{
+      name: string;
+    }>;
+  };
 
   created_at: string;
   updated_at: string;
 }
 
-
 export interface Role {
   id: number;
   name: string;
 }
-
 
 export interface Dependant {
   fullname: string;
@@ -79,4 +77,3 @@ export interface Dependant {
   phone: string;
   email: string;
 }
-

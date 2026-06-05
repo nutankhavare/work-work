@@ -16,9 +16,7 @@ const MobileHeader: React.FC<PanelHeaderProps> = ({ title, toggleSidebar }) => {
         >
           <FaBars size={20} />
         </button>
-        <h1 className="text-sm font-bold text-slate-800 uppercase tracking-wide">
-          {title}
-        </h1>
+        <h1 className="text-sm font-bold text-slate-800 uppercase tracking-wide">{title}</h1>
       </div>
 
       {/* Optional: Add User Avatar or Notification Icon here for Mobile */}

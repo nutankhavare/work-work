@@ -1,5 +1,3 @@
-
-
 import axios from "axios";
 
 const trimTrailingSlash = (value: string) => value.replace(/\/+$/, "");

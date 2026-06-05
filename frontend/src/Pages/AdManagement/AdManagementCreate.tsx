@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button, Input, Card } from "../../Components/UI";
 import tenantApi from "../../Services/ApiService";
-import { Megaphone, Cloud, CheckCircle, Info, ToggleLeft, ArrowLeft, UploadCloud } from "lucide-react";
+import { Megaphone, CheckCircle, ArrowLeft, UploadCloud } from "lucide-react";
 import PageHeader from "../../Components/UI/PageHeader";
 
 interface Form {
@@ -25,10 +25,7 @@ const SectionHeader = ({ icon, title }: { icon: string; title: string }) => (
       background: "var(--surface)",
     }}
   >
-    <span
-      className="material-symbols-outlined"
-      style={{ fontSize: 18, color: "var(--primary)" }}
-    >
+    <span className="material-symbols-outlined" style={{ fontSize: 18, color: "var(--primary)" }}>
       {icon}
     </span>
     <span
@@ -48,13 +45,7 @@ const Body = ({ children }: { children: React.ReactNode }) => (
   <div style={{ padding: "20px 22px" }}>{children}</div>
 );
 
-const Label = ({
-  children,
-  required,
-}: {
-  children: React.ReactNode;
-  required?: boolean;
-}) => (
+const Label = ({ children, required }: { children: React.ReactNode; required?: boolean }) => (
   <label
     style={{
       display: "block",
@@ -73,11 +64,7 @@ const Label = ({
 
 const Err = ({ msg }: { msg?: string }) =>
   msg ? (
-    <div
-      style={{ fontSize: 10, color: "#DC2626", fontWeight: 700, marginTop: 3 }}
-    >
-      ⚠ {msg}
-    </div>
+    <div style={{ fontSize: 10, color: "#DC2626", fontWeight: 700, marginTop: 3 }}>⚠ {msg}</div>
   ) : null;
 
 export const AdManagementCreate = () => {
@@ -97,11 +84,7 @@ export const AdManagementCreate = () => {
 
   const f =
     (key: keyof Form) =>
-    (
-      e: React.ChangeEvent<
-        HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement
-      >,
-    ) => {
+    (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
       setForm((v) => ({ ...v, [key]: e.target.value }));
       setErrs((v) => ({ ...v, [key]: undefined }));
     };
@@ -123,9 +106,13 @@ export const AdManagementCreate = () => {
       const formData = new FormData();
       formData.append("file", file);
 
-      const response = await tenantApi.post<{ success: boolean; url: string }>("/upload", formData, {
-        headers: { "Content-Type": "multipart/form-data" },
-      });
+      const response = await tenantApi.post<{ success: boolean; url: string }>(
+        "/upload",
+        formData,
+        {
+          headers: { "Content-Type": "multipart/form-data" },
+        },
+      );
 
       if (response.data?.success && response.data.url) {
         setForm((v) => ({ ...v, image: response.data.url }));
@@ -170,9 +157,7 @@ export const AdManagementCreate = () => {
       setSaveError("");
     } catch (err) {
       console.error(err);
-      setSaveError(
-        "Failed to save ad. Please check your connection and try again.",
-      );
+      setSaveError("Failed to save ad. Please check your connection and try again.");
       setTimeout(() => setSaveError(""), 5000);
     } finally {
       setLoading(false);
@@ -182,10 +167,10 @@ export const AdManagementCreate = () => {
   if (saved) {
     return (
       <div className="min-h-screen bg-[#F8FAFC] pb-12 font-[var(--font-manrope)]">
-        <PageHeader 
-          title="Ad Management" 
-          icon={<Megaphone size={18} />} 
-          breadcrumb="Admin / Ad Management / New Ad" 
+        <PageHeader
+          title="Ad Management"
+          icon={<Megaphone size={18} />}
+          breadcrumb="Admin / Ad Management / New Ad"
         />
         <motion.div
           className="page-body flex items-center justify-center pt-16"
@@ -262,10 +247,10 @@ export const AdManagementCreate = () => {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-12 font-[var(--font-manrope)]">
-      <PageHeader 
-        title="New Ad Upload" 
-        icon={<Megaphone size={18} />} 
-        breadcrumb="Admin / Ad Management / New Ad" 
+      <PageHeader
+        title="New Ad Upload"
+        icon={<Megaphone size={18} />}
+        breadcrumb="Admin / Ad Management / New Ad"
       />
 
       <div className="px-6">
@@ -344,7 +329,7 @@ export const AdManagementCreate = () => {
                     if (file) handleFileUpload(file);
                   }}
                 />
-                
+
                 {form.image ? (
                   <div className="border border-slate-200 rounded-2xl p-4 bg-white flex flex-col items-center gap-4">
                     <img
@@ -353,10 +338,7 @@ export const AdManagementCreate = () => {
                       className="max-h-[220px] rounded-lg object-contain border border-slate-100"
                     />
                     <div className="flex gap-2">
-                      <Button
-                        variant="secondary"
-                        onClick={() => fileInputRef.current?.click()}
-                      >
+                      <Button variant="secondary" onClick={() => fileInputRef.current?.click()}>
                         Change Image
                       </Button>
                       <Button
@@ -420,11 +402,7 @@ export const AdManagementCreate = () => {
                               : "#FEF3C7"
                             : "var(--surface)",
                         color:
-                          form.status === s
-                            ? s === "Active"
-                              ? "#059669"
-                              : "#D97706"
-                            : "#64748B",
+                          form.status === s ? (s === "Active" ? "#059669" : "#D97706") : "#64748B",
                         fontWeight: 800,
                         fontSize: 13,
                         cursor: "pointer",
@@ -440,18 +418,10 @@ export const AdManagementCreate = () => {
           </Card>
 
           <div className="flex justify-end gap-3 mt-8">
-            <Button
-              variant="secondary"
-              onClick={() => navigate("/ads")}
-              disabled={loading}
-            >
+            <Button variant="secondary" onClick={() => navigate("/ads")} disabled={loading}>
               CANCEL
             </Button>
-            <Button
-              variant="default"
-              onClick={handleSave}
-              disabled={loading || uploadingImage}
-            >
+            <Button variant="default" onClick={handleSave} disabled={loading || uploadingImage}>
               {loading ? "SAVING..." : "UPLOAD AD"}
             </Button>
           </div>
@@ -461,5 +431,4 @@ export const AdManagementCreate = () => {
   );
 };
 
-  export default AdManagementCreate;
-  
+export default AdManagementCreate;

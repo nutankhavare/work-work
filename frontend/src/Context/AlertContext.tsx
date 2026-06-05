@@ -1,9 +1,4 @@
-import {
-  createContext,
-  useState,
-  useContext,
-  type ReactNode,
-} from "react";
+import { createContext, useState, useContext, type ReactNode } from "react";
 import AlertMessage from "../Components/UI/AlertMessage";
 
 type AlertType = "success" | "error" | "info" | "warning" | "message";
@@ -40,13 +35,7 @@ export const AlertProvider = ({ children }: { children: ReactNode }) => {
   return (
     <AlertContext.Provider value={{ showAlert }}>
       {/* The AlertMessage component now lives here, at the top level */}
-      {alert && (
-        <AlertMessage
-          message={alert.message}
-          type={alert.type}
-          onClose={handleClose}
-        />
-      )}
+      {alert && <AlertMessage message={alert.message} type={alert.type} onClose={handleClose} />}
       {children}
     </AlertContext.Provider>
   );

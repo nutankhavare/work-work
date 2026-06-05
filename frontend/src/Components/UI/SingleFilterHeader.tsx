@@ -26,10 +26,7 @@ const SingleFilterHeader: React.FC<FilterProps> = ({
 }) => {
   return (
     <div className={`w-full max-w-xs ${className}`}>
-      <label
-        htmlFor={id}
-        className="block text-sm uppercase font-medium text-gray-700 mb-2"
-      >
+      <label htmlFor={id} className="block text-sm uppercase font-medium text-gray-700 mb-2">
         {label}
       </label>
       <select

@@ -66,27 +66,18 @@ const Table = <T extends { id: number | string }>({
                   <td className="px-6 py-4 text-sm">
                     <div className="flex justify-center items-center gap-2">
                       {viewUrl && (
-                        <Link
-                          to={`${viewUrl}/${item.id}`}
-                          className="text-blue-600"
-                        >
+                        <Link to={`${viewUrl}/${item.id}`} className="text-blue-600">
                           <FaEye size={24} />
                         </Link>
                       )}
                       {editUrl && (
-                        <Link
-                          to={`${editUrl}/${item.id}`}
-                          className="text-green-900"
-                        >
+                        <Link to={`${editUrl}/${item.id}`} className="text-green-900">
                           <FaRegEdit size={24} />
                         </Link>
                       )}
 
                       {onDelete && (
-                        <button
-                          className="text-red-600"
-                          onClick={() => onDelete(item)}
-                        >
+                        <button className="text-red-600" onClick={() => onDelete(item)}>
                           <RiDeleteBin6Line size={24} />
                         </button>
                       )}

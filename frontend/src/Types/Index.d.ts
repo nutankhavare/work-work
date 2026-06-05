@@ -65,7 +65,7 @@ export interface GpsDevice {
   sequnce_number: string;
   serial_number: string;
   device_id: string;
-  manufacture_date:Date;
+  manufacture_date: Date;
   imei_number: string;
   status: string;
 }
@@ -75,7 +75,7 @@ export interface BeaconDevice {
   sequnce_number: string;
   serial_number: string;
   device_id: string;
-  manufacture_date:Date;
+  manufacture_date: Date;
   imei_number: string;
   status: string;
 }
@@ -107,8 +107,8 @@ export interface LiveVehicle {
     id: string;
     name: string;
     type: string;
-    mobile_number:string;
-    profile_photo:string;
+    mobile_number: string;
+    profile_photo: string;
     lastSeen: string;
     rssi?: number;
   }>;

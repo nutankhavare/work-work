@@ -6,15 +6,7 @@ import { Loader } from "../../Components/UI/Loader";
 import tenantApi from "../../Services/ApiService";
 import { useAlert } from "../../Context/AlertContext";
 import { useConfirm } from "../../Context/ConfirmContext";
-import {
-  TableContainer,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-} from "../../Components/Table/Table";
+import { TableContainer, Table, Thead, Tbody, Tr, Th, Td } from "../../Components/Table/Table";
 import EmptyState from "../../Components/UI/EmptyState";
 
 interface Device {
@@ -44,11 +36,15 @@ const StatCard = ({ title, value, subtext, icon: Icon, colorClass, delay = 0 }: 
     className="bg-white rounded-[14px] p-6 border border-[#e8edf5] shadow-[0_1px_4px_rgba(0,0,0,0.04)] hover:shadow-[0_4px_16px_rgba(124,58,237,0.08)] transition-all group"
   >
     <div className="flex items-center gap-4">
-      <div className={`p-4 rounded-[12px] ${colorClass} transition-transform group-hover:scale-110`}>
+      <div
+        className={`p-4 rounded-[12px] ${colorClass} transition-transform group-hover:scale-110`}
+      >
         <Icon size={24} />
       </div>
       <div>
-        <p className="text-[11px] font-[800] text-[#94a3b8] uppercase tracking-wider mb-1">{title}</p>
+        <p className="text-[11px] font-[800] text-[#94a3b8] uppercase tracking-wider mb-1">
+          {title}
+        </p>
         <div className="flex items-baseline gap-2">
           <h4 className="text-2xl font-[900] text-[#1e293b]">{value}</h4>
           {subtext && <span className="text-[11px] font-[700] text-[#059669]">{subtext}</span>}
@@ -61,12 +57,16 @@ const StatCard = ({ title, value, subtext, icon: Icon, colorClass, delay = 0 }: 
 const StatusBadge = ({ status }: { status: string }) => {
   const isActive = status?.toLowerCase() === "active";
   return (
-    <span className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-[900] uppercase tracking-wider border ${
-      isActive
-        ? "bg-emerald-50 text-emerald-700 border-emerald-200 shadow-xs"
-        : "bg-slate-50 text-slate-500 border-slate-200 shadow-xs"
-    }`}>
-      <span className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-emerald-500 animate-pulse" : "bg-slate-400"}`} />
+    <span
+      className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10px] font-[900] uppercase tracking-wider border ${
+        isActive
+          ? "bg-emerald-50 text-emerald-700 border-emerald-200 shadow-xs"
+          : "bg-slate-50 text-slate-500 border-slate-200 shadow-xs"
+      }`}
+    >
+      <span
+        className={`w-1.5 h-1.5 rounded-full ${isActive ? "bg-emerald-500 animate-pulse" : "bg-slate-400"}`}
+      />
       {status}
     </span>
   );
@@ -190,7 +190,6 @@ const DeviceManagementIndexPage = () => {
 
         {/* Main Content Card */}
         <div className="bg-white rounded-[18px] border border-[#eef2f6] shadow-[0_2px_12px_rgba(30,41,59,0.03)] overflow-hidden">
-          
           {/* Tabs + Search */}
           <div className="p-6 border-b border-[#f1f5f9] bg-[#fafbff]/50">
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
@@ -205,9 +204,15 @@ const DeviceManagementIndexPage = () => {
                 >
                   <Radio size={16} />
                   GPS
-                  <span className={`ml-1.5 px-2 py-0.5 rounded-[6px] text-[10px] font-[900] ${
-                    activeTab === "gps" ? "bg-indigo-50 text-indigo-600" : "bg-slate-200 text-slate-500"
-                  }`}>{gpsTotal}</span>
+                  <span
+                    className={`ml-1.5 px-2 py-0.5 rounded-[6px] text-[10px] font-[900] ${
+                      activeTab === "gps"
+                        ? "bg-indigo-50 text-indigo-600"
+                        : "bg-slate-200 text-slate-500"
+                    }`}
+                  >
+                    {gpsTotal}
+                  </span>
                 </button>
                 <button
                   onClick={() => setActiveTab("beacon")}
@@ -219,14 +224,23 @@ const DeviceManagementIndexPage = () => {
                 >
                   <Bluetooth size={16} />
                   Beacons
-                  <span className={`ml-1.5 px-2 py-0.5 rounded-[6px] text-[10px] font-[900] ${
-                    activeTab === "beacon" ? "bg-indigo-50 text-indigo-600" : "bg-slate-200 text-slate-500"
-                  }`}>{beaconTotal}</span>
+                  <span
+                    className={`ml-1.5 px-2 py-0.5 rounded-[6px] text-[10px] font-[900] ${
+                      activeTab === "beacon"
+                        ? "bg-indigo-50 text-indigo-600"
+                        : "bg-slate-200 text-slate-500"
+                    }`}
+                  >
+                    {beaconTotal}
+                  </span>
                 </button>
               </div>
 
               <div className="relative group lg:w-[320px]">
-                <Search size={18} className="absolute left-4 top-1/2 -translate-y-1/2 text-[#94a3b8] group-focus-within:text-[#7c3aed] transition-colors" />
+                <Search
+                  size={18}
+                  className="absolute left-4 top-1/2 -translate-y-1/2 text-[#94a3b8] group-focus-within:text-[#7c3aed] transition-colors"
+                />
                 <input
                   type="text"
                   value={searchQuery}
@@ -243,43 +257,76 @@ const DeviceManagementIndexPage = () => {
             {loading ? (
               <div className="py-24 flex flex-col items-center gap-4">
                 <Loader />
-                <p className="text-[14px] font-[700] text-[#94a3b8]">Synchronizing Hardware Inventory...</p>
+                <p className="text-[14px] font-[700] text-[#94a3b8]">
+                  Synchronizing Hardware Inventory...
+                </p>
               </div>
             ) : filteredDevices.length === 0 ? (
               <div className="py-24">
                 <EmptyState
-                  title={activeTab === "gps" ? "No GPS Trackers Found" : "No Bluetooth Beacons Found"}
+                  title={
+                    activeTab === "gps" ? "No GPS Trackers Found" : "No Bluetooth Beacons Found"
+                  }
                   description="Adjust your filters or add hardware from the central registry."
-                  icon={activeTab === "gps" ? <Radio size={64} className="text-slate-200 mb-4" /> : <Bluetooth size={64} className="text-slate-200 mb-4" />}
+                  icon={
+                    activeTab === "gps" ? (
+                      <Radio size={64} className="text-slate-200 mb-4" />
+                    ) : (
+                      <Bluetooth size={64} className="text-slate-200 mb-4" />
+                    )
+                  }
                 />
               </div>
             ) : (
               <TableContainer maxHeight="65vh">
                 <Table className="w-full">
                   <Thead className="!bg-[#fafbff] border-b border-[#f1f5f9]">
-                    <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px] pl-8">Device Info</Th>
+                    <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px] pl-8">
+                      Device Info
+                    </Th>
                     {activeTab === "gps" ? (
-                      <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px]">SIM Configuration</Th>
+                      <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px]">
+                        SIM Configuration
+                      </Th>
                     ) : (
-                      <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px]">Battery Health</Th>
+                      <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px]">
+                        Battery Health
+                      </Th>
                     )}
-                    <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px] text-center">Diagnostics</Th>
-                    <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px] text-center">Status</Th>
-                    <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px] text-center">Assignment</Th>
-                    <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px] text-center pr-8">Actions</Th>
+                    <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px] text-center">
+                      Diagnostics
+                    </Th>
+                    <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px] text-center">
+                      Status
+                    </Th>
+                    <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px] text-center">
+                      Assignment
+                    </Th>
+                    <Th className="text-[11px] font-[900] uppercase tracking-[0.08em] !text-[#64748b] py-[18px] text-center pr-8">
+                      Actions
+                    </Th>
                   </Thead>
                   <Tbody>
                     {filteredDevices.map((device) => (
-                      <Tr key={device.id} className="hover:bg-[#fdfbff] transition-colors border-b border-[#f8fafc] last:border-0">
+                      <Tr
+                        key={device.id}
+                        className="hover:bg-[#fdfbff] transition-colors border-b border-[#f8fafc] last:border-0"
+                      >
                         <Td className="py-5 pl-8">
                           <div className="flex items-center gap-4">
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm ${
-                              activeTab === "gps" ? "bg-blue-50 border-blue-100 text-blue-600" : "bg-violet-50 border-violet-100 text-violet-600"
-                            }`}>
+                            <div
+                              className={`w-10 h-10 rounded-xl flex items-center justify-center border shadow-sm ${
+                                activeTab === "gps"
+                                  ? "bg-blue-50 border-blue-100 text-blue-600"
+                                  : "bg-violet-50 border-violet-100 text-violet-600"
+                              }`}
+                            >
                               {activeTab === "gps" ? <Radio size={18} /> : <Bluetooth size={18} />}
                             </div>
                             <div>
-                              <p className="text-[13.5px] font-[900] text-[#1e293b] leading-tight mb-1">{device.device_id}</p>
+                              <p className="text-[13.5px] font-[900] text-[#1e293b] leading-tight mb-1">
+                                {device.device_id}
+                              </p>
                               <span className="text-[10px] font-[800] text-slate-400 uppercase tracking-widest">
                                 {activeTab === "gps" ? "GPS TRACKER" : "BLUETOOTH TAG"}
                               </span>
@@ -289,27 +336,37 @@ const DeviceManagementIndexPage = () => {
                         <Td className="py-5">
                           {activeTab === "gps" ? (
                             <div className="flex flex-col gap-1">
-                              <p className="text-[13px] font-[800] text-[#475569]">{device.sim_number || "—"}</p>
-                              <p className="text-[10px] font-[700] text-slate-400 uppercase tracking-tight">{device.network_provider || "No Provider"}</p>
+                              <p className="text-[13px] font-[800] text-[#475569]">
+                                {device.sim_number || "—"}
+                              </p>
+                              <p className="text-[10px] font-[700] text-slate-400 uppercase tracking-tight">
+                                {device.network_provider || "No Provider"}
+                              </p>
                             </div>
                           ) : (
                             <BatteryBadge level={device.battery_level || 0} />
                           )}
                         </Td>
                         <Td className="py-5 text-center">
-                          <span className={`text-[12.5px] font-[700] px-3 py-1 rounded-lg border uppercase tracking-tighter ${
-                            (device.device_health || "Healthy").toLowerCase() === "healthy"
-                              ? "text-emerald-600 bg-emerald-50 border-emerald-100"
-                              : "text-amber-600 bg-amber-50 border-amber-100"
-                          }`}>{device.device_health || "Healthy"}</span>
+                          <span
+                            className={`text-[12.5px] font-[700] px-3 py-1 rounded-lg border uppercase tracking-tighter ${
+                              (device.device_health || "Healthy").toLowerCase() === "healthy"
+                                ? "text-emerald-600 bg-emerald-50 border-emerald-100"
+                                : "text-amber-600 bg-amber-50 border-amber-100"
+                            }`}
+                          >
+                            {device.device_health || "Healthy"}
+                          </span>
                         </Td>
-                        <Td className="py-5 text-center"><StatusBadge status={device.status} /></Td>
+                        <Td className="py-5 text-center">
+                          <StatusBadge status={device.status} />
+                        </Td>
                         <Td className="py-5 text-center">
                           {device.assigned_to ? (
                             <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[10.5px] font-[900] uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200">
-                              <span className="material-symbols-outlined text-[13px]">{
-                                device.assigned_type === "vehicle" ? "directions_bus" : "person"
-                              }</span>
+                              <span className="material-symbols-outlined text-[13px]">
+                                {device.assigned_type === "vehicle" ? "directions_bus" : "person"}
+                              </span>
                               {device.assigned_to_name || `ID: ${device.assigned_to}`}
                             </span>
                           ) : (
@@ -329,7 +386,9 @@ const DeviceManagementIndexPage = () => {
                             </button>
                           ) : (
                             <button
-                              onClick={() => setAssignModal({ open: true, device, type: activeTab })}
+                              onClick={() =>
+                                setAssignModal({ open: true, device, type: activeTab })
+                              }
                               className="px-4 py-2 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 text-indigo-600 text-[11px] font-[800] rounded-xl uppercase tracking-wider transition-all inline-flex items-center gap-2"
                             >
                               <Link2 size={13} />
@@ -380,7 +439,7 @@ const AssignModal = ({
   const { showAlert } = useAlert();
   const [entities, setEntities] = useState<any[]>([]);
   const [entityType, setEntityType] = useState<"staff" | "driver" | "vehicle">(
-    type === "beacon" ? "staff" : "vehicle"
+    type === "beacon" ? "staff" : "vehicle",
   );
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -449,12 +508,16 @@ const AssignModal = ({
         onClick={(e) => e.stopPropagation()}
       >
         <div className="text-center mb-6">
-          <div className={`w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center ${
-            type === "beacon" ? "bg-violet-50 text-violet-600" : "bg-blue-50 text-blue-600"
-          }`}>
+          <div
+            className={`w-14 h-14 mx-auto mb-4 rounded-full flex items-center justify-center ${
+              type === "beacon" ? "bg-violet-50 text-violet-600" : "bg-blue-50 text-blue-600"
+            }`}
+          >
             <Cpu size={28} />
           </div>
-          <h3 className="text-[17px] font-[900] text-[#1e293b] uppercase tracking-tight">Assign Hardware</h3>
+          <h3 className="text-[17px] font-[900] text-[#1e293b] uppercase tracking-tight">
+            Assign Hardware
+          </h3>
           <p className="text-[12px] font-[700] text-slate-400 mt-1 uppercase tracking-widest">
             {type.toUpperCase()}: {device.device_id}
           </p>
@@ -462,7 +525,9 @@ const AssignModal = ({
 
         {/* Entity Type Selection */}
         <div className="mb-4">
-          <label className="block text-[11px] font-[800] text-slate-400 uppercase tracking-wider mb-2">Entity Type</label>
+          <label className="block text-[11px] font-[800] text-slate-400 uppercase tracking-wider mb-2">
+            Entity Type
+          </label>
           <select
             value={entityType}
             onChange={(e) => {
@@ -479,7 +544,9 @@ const AssignModal = ({
 
         {/* Entity Selector */}
         <div className="mb-8">
-          <label className="block text-[11px] font-[800] text-slate-400 uppercase tracking-wider mb-2">Select {entityType}</label>
+          <label className="block text-[11px] font-[800] text-slate-400 uppercase tracking-wider mb-2">
+            Select {entityType}
+          </label>
           <select
             value={selectedId}
             onChange={(e) => setSelectedId(e.target.value)}
@@ -492,12 +559,13 @@ const AssignModal = ({
                 const isAssigned =
                   (entityType === "staff" && ent.beacon_id) ||
                   (entityType === "driver" && ent.beacon_id) ||
-                  (entityType === "vehicle" && (type === "gps" ? ent.gps_device_id : ent.beacon_count > 0));
+                  (entityType === "vehicle" &&
+                    (type === "gps" ? ent.gps_device_id : ent.beacon_count > 0));
 
                 const label =
                   entityType === "vehicle"
-                    ? `${ent.vehicle_number} (${ent.vehicle_name || 'Unnamed'})`
-                    : `${ent.first_name} ${ent.last_name} (${ent.employee_id || 'ID N/A'})`;
+                    ? `${ent.vehicle_number} (${ent.vehicle_name || "Unnamed"})`
+                    : `${ent.first_name} ${ent.last_name} (${ent.employee_id || "ID N/A"})`;
 
                 return (
                   <option key={ent.id} value={ent.id} disabled={!!isAssigned}>
@@ -507,7 +575,9 @@ const AssignModal = ({
               })}
           </select>
           {loading && (
-            <p className="text-[11px] font-[700] text-[#7c3aed] mt-2 animate-pulse">Syncing catalog options...</p>
+            <p className="text-[11px] font-[700] text-[#7c3aed] mt-2 animate-pulse">
+              Syncing catalog options...
+            </p>
           )}
         </div>
 

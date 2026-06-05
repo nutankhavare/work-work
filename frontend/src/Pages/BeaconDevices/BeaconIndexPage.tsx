@@ -75,8 +75,7 @@ const columns = [
   {
     key: "manufacture_date",
     label: "Manufacture Date",
-    render: (item: BeaconDevice) =>
-      new Date(item.manufacture_date).toLocaleDateString("en-IN"),
+    render: (item: BeaconDevice) => new Date(item.manufacture_date).toLocaleDateString("en-IN"),
   },
   {
     key: "status",
@@ -84,9 +83,7 @@ const columns = [
     render: (item: BeaconDevice) => (
       <span
         className={`px-2 py-1 rounded-full text-xs font-semibold ${
-          item.status === "active"
-            ? "bg-green-100 text-green-700"
-            : "bg-red-100 text-red-600"
+          item.status === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"
         }`}
       >
         {item.status}
@@ -96,8 +93,7 @@ const columns = [
 ];
 
 const BeaconIndexPage = () => {
-  const [filteredBeacons, setFilteredBeacons] =
-    useState<BeaconDevice[]>(dummyBeacons);
+  const [filteredBeacons, setFilteredBeacons] = useState<BeaconDevice[]>(dummyBeacons);
 
   const handleSearch = useCallback((query: string) => {
     if (!query) {
@@ -111,7 +107,7 @@ const BeaconIndexPage = () => {
         beacon.imei_number.toLowerCase().includes(q) ||
         beacon.serial_number.toLowerCase().includes(q) ||
         beacon.sequnce_number.toLowerCase().includes(q) ||
-        beacon.status.toLowerCase().includes(q)
+        beacon.status.toLowerCase().includes(q),
     );
     setFilteredBeacons(filtered);
   }, []);
@@ -131,11 +127,7 @@ const BeaconIndexPage = () => {
         />
       </div>
 
-      <Table<BeaconDevice>
-        list={filteredBeacons}
-        columns={columns}
-        editUrl="/beacons/edit"
-      />
+      <Table<BeaconDevice> list={filteredBeacons} columns={columns} editUrl="/beacons/edit" />
     </div>
   );
 };

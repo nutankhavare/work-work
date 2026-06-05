@@ -19,9 +19,7 @@ const GoogleMapDisplay: React.FC<GoogleMapProps> = ({
   onVehicleSelect,
 }) => {
   const createIconFromReactIcon = (color: string, size: number) => {
-    const iconMarkup = renderToStaticMarkup(
-      <BsBusFrontFill color={color} size={size} />
-    );
+    const iconMarkup = renderToStaticMarkup(<BsBusFrontFill color={color} size={size} />);
     const dataUrl = `data:image/svg+xml;base64,${btoa(iconMarkup)}`;
 
     return {
@@ -70,13 +68,9 @@ const GoogleMapDisplay: React.FC<GoogleMapProps> = ({
   };
   // const centerPosition = { lat: 15.8497, lng: 74.4977 }; // Belagavi
 
-  const centerPosition = vehicles.length > 0
-    ? vehicles[0].gps
-    : { lat: 15.8497, lng: 74.4977 }; // Fallback if no vehicles
-
+  const centerPosition = vehicles.length > 0 ? vehicles[0].gps : { lat: 15.8497, lng: 74.4977 }; // Fallback if no vehicles
 
   return (
-
     <GoogleMap
       mapContainerStyle={mapContainerStyle}
       center={centerPosition}
@@ -90,9 +84,7 @@ const GoogleMapDisplay: React.FC<GoogleMapProps> = ({
         <React.Fragment key={vehicle.vehicle_number}>
           <MarkerF
             position={vehicle.gps}
-            icon={
-              vehicle.vehicle_number === selectedVehicleNumber ? selectedIcon : defaultIcon
-            }
+            icon={vehicle.vehicle_number === selectedVehicleNumber ? selectedIcon : defaultIcon}
             onClick={() => {
               onVehicleSelect(vehicle.vehicle_number);
             }}
@@ -101,18 +93,18 @@ const GoogleMapDisplay: React.FC<GoogleMapProps> = ({
             }`}
           />
           {vehicle.beacons?.map((beacon, idx) => {
-             // Calculate a slight offset based on index so they cluster around the bus
-             const latOffset = (idx % 2 === 0 ? 1 : -1) * (0.00015 * Math.ceil((idx + 1) / 2));
-             const lngOffset = (idx % 2 !== 0 ? 1 : -1) * (0.00015 * Math.ceil((idx + 1) / 2));
-             const position = { lat: vehicle.gps.lat + latOffset, lng: vehicle.gps.lng + lngOffset };
-             return (
-               <MarkerF
-                 key={`${vehicle.vehicle_number}-beacon-${beacon.id}`}
-                 position={position}
-                 icon={beacon.type === 'driver' ? driverIcon : staffIcon}
-                 title={`${beacon.type.toUpperCase()}: ${beacon.name}`}
-               />
-             );
+            // Calculate a slight offset based on index so they cluster around the bus
+            const latOffset = (idx % 2 === 0 ? 1 : -1) * (0.00015 * Math.ceil((idx + 1) / 2));
+            const lngOffset = (idx % 2 !== 0 ? 1 : -1) * (0.00015 * Math.ceil((idx + 1) / 2));
+            const position = { lat: vehicle.gps.lat + latOffset, lng: vehicle.gps.lng + lngOffset };
+            return (
+              <MarkerF
+                key={`${vehicle.vehicle_number}-beacon-${beacon.id}`}
+                position={position}
+                icon={beacon.type === "driver" ? driverIcon : staffIcon}
+                title={`${beacon.type.toUpperCase()}: ${beacon.name}`}
+              />
+            );
           })}
         </React.Fragment>
       ))}

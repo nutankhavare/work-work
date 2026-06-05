@@ -19,12 +19,10 @@ const SaveButton = ({
   children, // allows wrapping content if needed
   ...props // 2. Capture all other props (onClick, type, onHover, etc.)
 }: SaveButtonProps) => {
-
   return (
     <button
       // 3. Spread the props onto the HTML button
-      {...props} 
-      
+      {...props}
       disabled={isSaving || disabled}
       className={`
         relative inline-flex items-center justify-center
@@ -42,13 +40,9 @@ const SaveButton = ({
       {isSaving ? (
         <CgSpinner className="animate-spin text-xl" />
       ) : (
-        <span className="text-lg">
-          {icon || <MdSave />}
-        </span>
+        <span className="text-lg">{icon || <MdSave />}</span>
       )}
-      <span>
-        {isSaving ? "Processing..." : label}
-      </span>
+      <span>{isSaving ? "Processing..." : label}</span>
     </button>
   );
 };

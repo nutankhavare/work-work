@@ -4,8 +4,8 @@ import PageHeader from "../../Components/UI/PageHeader";
 const FeedbacksPage = () => {
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-10 font-[var(--font-manrope)] animate-fade-in">
-      <PageHeader 
-        title="Feedbacks & Complaints" 
+      <PageHeader
+        title="Feedbacks & Complaints"
         icon={<MessageSquare size={18} />}
         breadcrumb="Admin / Support / Feedbacks"
       />
@@ -14,7 +14,9 @@ const FeedbacksPage = () => {
           <div className="w-16 h-16 bg-[#f5f3ff] rounded-2xl flex items-center justify-center text-[#7c3aed] mb-2 border border-[#eef2f6] shadow-sm">
             <MessageSquare size={28} />
           </div>
-          <h2 className="text-xl font-[900] text-[#1e293b] uppercase tracking-tight">Under Development</h2>
+          <h2 className="text-xl font-[900] text-[#1e293b] uppercase tracking-tight">
+            Under Development
+          </h2>
           <p className="text-[13px] font-[600] text-[#64748b] leading-relaxed">
             This module is currently under development.
           </p>

@@ -17,9 +17,7 @@ import {
   Plus,
   Search,
   Filter,
-  Calendar,
   Battery,
-  FileText,
   Check,
   X,
   ShieldAlert,
@@ -66,7 +64,8 @@ const tiers = [
     bgLight: "#EFF6FF",
     accentColor: "#2563EB",
     badgeText: "Staffing · Fleet Metrics",
-    description: "A clean view of employee age demographics, department breakdowns, and fleet type distributions.",
+    description:
+      "A clean view of employee age demographics, department breakdowns, and fleet type distributions.",
     features: [
       "Employee Age Demographics",
       "Department Distribution",
@@ -86,7 +85,8 @@ const tiers = [
     bgLight: "#F5F3FF",
     accentColor: "#7C3AED",
     badgeText: "Hardware · Drivers",
-    description: "Driver assignments, active GPS devices utilization, and live fleet status tracking ratios.",
+    description:
+      "Driver assignments, active GPS devices utilization, and live fleet status tracking ratios.",
     features: [
       "Driver Assignment Details",
       "GPS Hardware Tracking Rate",
@@ -107,7 +107,8 @@ const tiers = [
     bgLight: "#ECFDF5",
     accentColor: "#059669",
     badgeText: "Expiries · Compliance",
-    description: "Full audit-ready sheet for vehicle insurance, fitness certificates, and RTO permits status.",
+    description:
+      "Full audit-ready sheet for vehicle insurance, fitness certificates, and RTO permits status.",
     features: [
       "Insurance Expiry Warnings",
       "Fitness Certificate Audit",
@@ -128,7 +129,7 @@ export const ReportHub = ({ view }: ReportHubProps) => {
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [drivers, setDrivers] = useState<any[]>([]);
   const [gpsDevices, setGpsDevices] = useState<any[]>([]);
-  const [beacons, setBeacons] = useState<any[]>([]);
+  const [, setBeacons] = useState<any[]>([]);
   const [devices, setDevices] = useState<any[]>([]);
   const [complianceLogs, setComplianceLogs] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -246,13 +247,13 @@ export const ReportHub = ({ view }: ReportHubProps) => {
         "Employee ID": emp.employee_id || emp.id,
         "First Name": emp.first_name,
         "Last Name": emp.last_name,
-        "Email": emp.email || "—",
-        "Mobile": emp.mobile_number || "—",
-        "Age": age || "—",
-        "Gender": emp.gender || "—",
-        "Department": emp.department || "—",
-        "Designation": emp.designation || "—",
-        "Status": emp.status || "—",
+        Email: emp.email || "—",
+        Mobile: emp.mobile_number || "—",
+        Age: age || "—",
+        Gender: emp.gender || "—",
+        Department: emp.department || "—",
+        Designation: emp.designation || "—",
+        Status: emp.status || "—",
       };
     });
 
@@ -287,9 +288,17 @@ export const ReportHub = ({ view }: ReportHubProps) => {
     doc.setFontSize(10);
     doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 22);
 
-    const columns = ["Vehicle Number", "Insurance Expiry", "Fitness Expiry", "Pollution Expiry", "Permit Expiry", "Status"];
+    const columns = [
+      "Vehicle Number",
+      "Insurance Expiry",
+      "Fitness Expiry",
+      "Pollution Expiry",
+      "Permit Expiry",
+      "Status",
+    ];
     const rows = vehicles.map((veh) => {
-      const formatDate = (dateStr: string) => dateStr ? new Date(dateStr).toLocaleDateString() : "—";
+      const formatDate = (dateStr: string) =>
+        dateStr ? new Date(dateStr).toLocaleDateString() : "—";
       return [
         veh.vehicle_number,
         formatDate(veh.insurance_expiry_date),
@@ -315,9 +324,17 @@ export const ReportHub = ({ view }: ReportHubProps) => {
     doc.setFontSize(10);
     doc.text(`Generated: ${new Date().toLocaleDateString()}`, 14, 22);
 
-    const columns = ["Document Name", "Category", "Reg Number", "Authority", "Date Recorded", "Status"];
+    const columns = [
+      "Document Name",
+      "Category",
+      "Reg Number",
+      "Authority",
+      "Date Recorded",
+      "Status",
+    ];
     const rows = complianceLogs.map((log) => {
-      const formatDate = (dateStr: string) => dateStr ? new Date(dateStr).toLocaleDateString() : "—";
+      const formatDate = (dateStr: string) =>
+        dateStr ? new Date(dateStr).toLocaleDateString() : "—";
       return [
         log.document_name,
         log.category,
@@ -384,7 +401,10 @@ export const ReportHub = ({ view }: ReportHubProps) => {
   // Custom fuel donut chart SVG builder
   const renderDonutChart = (fuelStats: Record<string, number>) => {
     const total = Object.values(fuelStats).reduce((a, b) => a + b, 0);
-    if (total === 0) return <div className="text-slate-400 text-xs font-semibold py-6">No vehicle data available</div>;
+    if (total === 0)
+      return (
+        <div className="text-slate-400 text-xs font-semibold py-6">No vehicle data available</div>
+      );
 
     const colors = {
       Diesel: "#3B82F6",
@@ -402,11 +422,18 @@ export const ReportHub = ({ view }: ReportHubProps) => {
       <div className="flex flex-col sm:flex-row items-center justify-around gap-6 py-2">
         <div className="relative w-36 h-36">
           <svg className="w-full h-full transform -rotate-90" viewBox="0 0 120 120">
-            <circle cx="60" cy="60" r={radius} fill="transparent" stroke="#F1F5F9" strokeWidth="14" />
+            <circle
+              cx="60"
+              cy="60"
+              r={radius}
+              fill="transparent"
+              stroke="#F1F5F9"
+              strokeWidth="14"
+            />
             {Object.entries(fuelStats).map(([fuel, val]) => {
               const percentage = val / total;
               const strokeLength = percentage * circumference;
-              const strokeOffset = circumference - (accumulatedPercentage * circumference);
+              const strokeOffset = circumference - accumulatedPercentage * circumference;
               accumulatedPercentage += percentage;
               const strokeColor = (colors as any)[fuel] || colors.Other;
 
@@ -429,7 +456,9 @@ export const ReportHub = ({ view }: ReportHubProps) => {
           </svg>
           <div className="absolute inset-0 flex flex-col items-center justify-center text-center">
             <span className="text-2xl font-black text-slate-800">{total}</span>
-            <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest">Vehicles</span>
+            <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-widest">
+              Vehicles
+            </span>
           </div>
         </div>
 
@@ -439,10 +468,15 @@ export const ReportHub = ({ view }: ReportHubProps) => {
             const strokeColor = (colors as any)[fuel] || colors.Other;
             return (
               <div key={fuel} className="flex items-center gap-3">
-                <span className="w-3.5 h-3.5 rounded-full flex-shrink-0" style={{ backgroundColor: strokeColor }} />
+                <span
+                  className="w-3.5 h-3.5 rounded-full flex-shrink-0"
+                  style={{ backgroundColor: strokeColor }}
+                />
                 <div className="flex items-baseline gap-1.5">
                   <span className="text-xs font-black text-slate-700">{fuel}</span>
-                  <span className="text-[11px] font-bold text-slate-400">({val} · {percent}%)</span>
+                  <span className="text-[11px] font-bold text-slate-400">
+                    ({val} · {percent}%)
+                  </span>
                 </div>
               </div>
             );
@@ -483,18 +517,32 @@ export const ReportHub = ({ view }: ReportHubProps) => {
 
     const empPageSize = 5;
     const totalEmpPages = Math.ceil(filteredEmployees.length / empPageSize) || 1;
-    const paginatedEmployees = filteredEmployees.slice((empPage - 1) * empPageSize, empPage * empPageSize);
+    const paginatedEmployees = filteredEmployees.slice(
+      (empPage - 1) * empPageSize,
+      empPage * empPageSize,
+    );
 
     return (
       <div className="min-h-screen bg-[#F8FAFC] pb-12 font-[var(--font-manrope)]">
-        <PageHeader title="Basic Report" icon={<BarChart2 size={18} />} breadcrumb="Admin / Reports / Basic" />
+        <PageHeader
+          title="Basic Report"
+          icon={<BarChart2 size={18} />}
+          breadcrumb="Admin / Reports / Basic"
+        />
 
         <div className="max-w-[1100px] mx-auto px-6 mt-6">
           <div className="flex justify-between items-center mb-6">
-            <button onClick={() => navigate("/reports")} className="btn btn-secondary flex items-center gap-2 hover:bg-slate-100 transition-colors">
+            <button
+              onClick={() => navigate("/reports")}
+              className="btn btn-secondary flex items-center gap-2 hover:bg-slate-100 transition-colors"
+            >
               <ArrowLeft size={16} /> Back to Hub
             </button>
-            <Button className="flex items-center gap-2 shadow-sm" variant="default" onClick={exportBasicToExcel}>
+            <Button
+              className="flex items-center gap-2 shadow-sm"
+              variant="default"
+              onClick={exportBasicToExcel}
+            >
               <Download size={16} /> Export Staff Excel
             </Button>
           </div>
@@ -502,17 +550,44 @@ export const ReportHub = ({ view }: ReportHubProps) => {
           {/* Quick Metrics Grid */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             {[
-              { label: "Total Employees", value: employees.length, bg: "bg-blue-50 text-blue-600 border-blue-100", icon: Users },
-              { label: "Departments", value: Object.keys(depts).length, bg: "bg-purple-50 text-purple-600 border-purple-100", icon: Activity },
-              { label: "Active Fleet", value: vehicles.length, bg: "bg-emerald-50 text-emerald-600 border-emerald-100", icon: Bus },
-              { label: "Avg Seating Capacity", value: avgCapacity, bg: "bg-amber-50 text-amber-600 border-amber-100", icon: Sparkles },
+              {
+                label: "Total Employees",
+                value: employees.length,
+                bg: "bg-blue-50 text-blue-600 border-blue-100",
+                icon: Users,
+              },
+              {
+                label: "Departments",
+                value: Object.keys(depts).length,
+                bg: "bg-purple-50 text-purple-600 border-purple-100",
+                icon: Activity,
+              },
+              {
+                label: "Active Fleet",
+                value: vehicles.length,
+                bg: "bg-emerald-50 text-emerald-600 border-emerald-100",
+                icon: Bus,
+              },
+              {
+                label: "Avg Seating Capacity",
+                value: avgCapacity,
+                bg: "bg-amber-50 text-amber-600 border-amber-100",
+                icon: Sparkles,
+              },
             ].map((metric, i) => (
-              <div key={i} className={`p-4 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center gap-4`}>
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${metric.bg} border`}>
+              <div
+                key={i}
+                className={`p-4 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center gap-4`}
+              >
+                <div
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center ${metric.bg} border`}
+                >
                   <metric.icon size={20} />
                 </div>
                 <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{metric.label}</p>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                    {metric.label}
+                  </p>
                   <p className="text-xl font-black text-slate-800">{metric.value}</p>
                 </div>
               </div>
@@ -529,19 +604,33 @@ export const ReportHub = ({ view }: ReportHubProps) => {
                 {[
                   { label: "Under 25 years", val: ageDemographics.under25, color: "bg-cyan-500" },
                   { label: "25 - 35 years", val: ageDemographics.range25_35, color: "bg-blue-600" },
-                  { label: "36 - 45 years", val: ageDemographics.range36_45, color: "bg-indigo-600" },
-                  { label: "46 - 55 years", val: ageDemographics.range46_55, color: "bg-violet-600" },
+                  {
+                    label: "36 - 45 years",
+                    val: ageDemographics.range36_45,
+                    color: "bg-indigo-600",
+                  },
+                  {
+                    label: "46 - 55 years",
+                    val: ageDemographics.range46_55,
+                    color: "bg-violet-600",
+                  },
                   { label: "Over 55 years", val: ageDemographics.over55, color: "bg-slate-500" },
                 ].map((item) => {
-                  const percent = employees.length > 0 ? Math.round((item.val / employees.length) * 100) : 0;
+                  const percent =
+                    employees.length > 0 ? Math.round((item.val / employees.length) * 100) : 0;
                   return (
                     <div key={item.label} className="space-y-1">
                       <div className="flex justify-between text-xs font-bold text-slate-600">
                         <span>{item.label}</span>
-                        <span>{item.val} ({percent}%)</span>
+                        <span>
+                          {item.val} ({percent}%)
+                        </span>
                       </div>
                       <div className="w-full bg-slate-100 h-2.5 rounded-full overflow-hidden">
-                        <div className={`h-full rounded-full ${item.color}`} style={{ width: `${percent}%` }} />
+                        <div
+                          className={`h-full rounded-full ${item.color}`}
+                          style={{ width: `${percent}%` }}
+                        />
                       </div>
                     </div>
                   );
@@ -590,8 +679,10 @@ export const ReportHub = ({ view }: ReportHubProps) => {
                     className="w-full sm:w-36 pl-9 pr-3 py-1.5 text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-blue-400 focus:bg-white appearance-none"
                   >
                     <option value="all">All Depts</option>
-                    {Object.keys(depts).map(d => (
-                      <option key={d} value={d}>{d}</option>
+                    {Object.keys(depts).map((d) => (
+                      <option key={d} value={d}>
+                        {d}
+                      </option>
                     ))}
                   </select>
                 </div>
@@ -615,10 +706,19 @@ export const ReportHub = ({ view }: ReportHubProps) => {
                     paginatedEmployees.map((emp) => {
                       const age = calculateAge(emp.date_of_birth);
                       return (
-                        <tr key={emp.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
-                          <td className="py-3 px-4 font-mono text-slate-500">{emp.employee_id || `EMP-${emp.id}`}</td>
-                          <td className="py-3 px-4 text-slate-800">{emp.first_name} {emp.last_name}</td>
-                          <td className="py-3 px-4 text-slate-600">{emp.department || "General"}</td>
+                        <tr
+                          key={emp.id}
+                          className="border-b border-slate-50 hover:bg-slate-50 transition-colors"
+                        >
+                          <td className="py-3 px-4 font-mono text-slate-500">
+                            {emp.employee_id || `EMP-${emp.id}`}
+                          </td>
+                          <td className="py-3 px-4 text-slate-800">
+                            {emp.first_name} {emp.last_name}
+                          </td>
+                          <td className="py-3 px-4 text-slate-600">
+                            {emp.department || "General"}
+                          </td>
                           <td className="py-3 px-4 text-slate-500">{emp.designation || "Staff"}</td>
                           <td className="py-3 px-4">{age || "—"}</td>
                           <td className="py-3 px-4">
@@ -643,10 +743,12 @@ export const ReportHub = ({ view }: ReportHubProps) => {
             {/* Pagination Controls */}
             {totalEmpPages > 1 && (
               <div className="flex justify-between items-center mt-4 pt-4 border-t border-slate-100 text-xs font-bold text-slate-500">
-                <span>Showing {paginatedEmployees.length} of {filteredEmployees.length} employees</span>
+                <span>
+                  Showing {paginatedEmployees.length} of {filteredEmployees.length} employees
+                </span>
                 <div className="flex gap-1.5">
                   <button
-                    onClick={() => setEmpPage(p => Math.max(p - 1, 1))}
+                    onClick={() => setEmpPage((p) => Math.max(p - 1, 1))}
                     disabled={empPage === 1}
                     className="px-2.5 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-transparent"
                   >
@@ -656,7 +758,7 @@ export const ReportHub = ({ view }: ReportHubProps) => {
                     {empPage} of {totalEmpPages}
                   </span>
                   <button
-                    onClick={() => setEmpPage(p => Math.min(p + 1, totalEmpPages))}
+                    onClick={() => setEmpPage((p) => Math.min(p + 1, totalEmpPages))}
                     disabled={empPage === totalEmpPages}
                     className="px-2.5 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-transparent"
                   >
@@ -676,53 +778,75 @@ export const ReportHub = ({ view }: ReportHubProps) => {
      ─────────────────────────────────────────────── */
   if (view === "advanced") {
     // Math indicators
-    const vehiclesWithGps = vehicles.filter(v => v.gps_device_id).length;
+    const vehiclesWithGps = vehicles.filter((v) => v.gps_device_id).length;
     const gpsRate = vehicles.length ? Math.round((vehiclesWithGps / vehicles.length) * 100) : 0;
 
-    const driversWithBeacon = drivers.filter(d => d.beacon_id).length;
-    const staffWithBeacon = employees.filter(e => e.beacon_id).length;
-    const beaconRate = (drivers.length + employees.length)
-      ? Math.round(((driversWithBeacon + staffWithBeacon) / (drivers.length + employees.length)) * 100)
-      : 0;
+    const driversWithBeacon = drivers.filter((d) => d.beacon_id).length;
+    const staffWithBeacon = employees.filter((e) => e.beacon_id).length;
+    const beaconRate =
+      drivers.length + employees.length
+        ? Math.round(
+            ((driversWithBeacon + staffWithBeacon) / (drivers.length + employees.length)) * 100,
+          )
+        : 0;
 
-    const isHealthy = (h: string) => !h || h.toLowerCase() === "good" || h.toLowerCase() === "healthy" || h.toLowerCase() === "active";
-    const totalHealthy = devices.filter(d => isHealthy(d.device_health)).length;
+    const isHealthy = (h: string) =>
+      !h ||
+      h.toLowerCase() === "good" ||
+      h.toLowerCase() === "healthy" ||
+      h.toLowerCase() === "active";
+    const totalHealthy = devices.filter((d) => isHealthy(d.device_health)).length;
     const healthRate = devices.length ? Math.round((totalHealthy / devices.length) * 100) : 100;
 
     // Allocation Anomalies
     const anomalies: string[] = [];
-    vehicles.forEach(v => {
+    vehicles.forEach((v) => {
       if (!v.gps_device_id) {
         anomalies.push(`Vehicle ${v.vehicle_number} does not have a GPS device assigned.`);
       }
     });
-    drivers.forEach(d => {
+    drivers.forEach((d) => {
       if (!d.beacon_id) {
-        anomalies.push(`Driver ${d.first_name} ${d.last_name} does not have an active Beacon assigned.`);
+        anomalies.push(
+          `Driver ${d.first_name} ${d.last_name} does not have an active Beacon assigned.`,
+        );
       }
     });
 
     const filteredDevices = devices.filter((d) => {
       const matchesSearch =
         d.device_id.toLowerCase().includes(deviceSearch.toLowerCase()) ||
-        (d.assigned_to_name && d.assigned_to_name.toLowerCase().includes(deviceSearch.toLowerCase()));
-      
+        (d.assigned_to_name &&
+          d.assigned_to_name.toLowerCase().includes(deviceSearch.toLowerCase()));
+
       const type = d.device_type || (d.sim_number ? "GPS" : "Beacon");
-      const matchesType = deviceTypeFilter === "all" || type.toLowerCase() === deviceTypeFilter.toLowerCase();
-      
+      const matchesType =
+        deviceTypeFilter === "all" || type.toLowerCase() === deviceTypeFilter.toLowerCase();
+
       return matchesSearch && matchesType;
     });
 
     return (
       <div className="min-h-screen bg-[#F8FAFC] pb-12 font-[var(--font-manrope)]">
-        <PageHeader title="Advanced Report" icon={<TrendingUp size={18} />} breadcrumb="Admin / Reports / Advanced" />
+        <PageHeader
+          title="Advanced Report"
+          icon={<TrendingUp size={18} />}
+          breadcrumb="Admin / Reports / Advanced"
+        />
 
         <div className="max-w-[1100px] mx-auto px-6 mt-6">
           <div className="flex justify-between items-center mb-6">
-            <button onClick={() => navigate("/reports")} className="btn btn-secondary flex items-center gap-2 hover:bg-slate-100 transition-colors">
+            <button
+              onClick={() => navigate("/reports")}
+              className="btn btn-secondary flex items-center gap-2 hover:bg-slate-100 transition-colors"
+            >
               <ArrowLeft size={16} /> Back to Hub
             </button>
-            <Button className="flex items-center gap-2 shadow-sm" variant="default" onClick={exportAdvancedToExcel}>
+            <Button
+              className="flex items-center gap-2 shadow-sm"
+              variant="default"
+              onClick={exportAdvancedToExcel}
+            >
               <Download size={16} /> Export Device Audit
             </Button>
           </div>
@@ -730,9 +854,24 @@ export const ReportHub = ({ view }: ReportHubProps) => {
           {/* Device allocation cards */}
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
             {[
-              { label: "GPS Allocation Rate", value: `${gpsRate}%`, detail: `${vehiclesWithGps} of ${vehicles.length} vehicles assigned`, bg: "linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%)" },
-              { label: "Beacon Allocation Rate", value: `${beaconRate}%`, detail: `${driversWithBeacon + staffWithBeacon} total beacons assigned`, bg: "linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)" },
-              { label: "Device Integrity Score", value: `${healthRate}%`, detail: `${totalHealthy} of ${devices.length} devices reporting healthy`, bg: "linear-gradient(135deg, #10B981 0%, #047857 100%)" },
+              {
+                label: "GPS Allocation Rate",
+                value: `${gpsRate}%`,
+                detail: `${vehiclesWithGps} of ${vehicles.length} vehicles assigned`,
+                bg: "linear-gradient(135deg, #7C3AED 0%, #5B21B6 100%)",
+              },
+              {
+                label: "Beacon Allocation Rate",
+                value: `${beaconRate}%`,
+                detail: `${driversWithBeacon + staffWithBeacon} total beacons assigned`,
+                bg: "linear-gradient(135deg, #3B82F6 0%, #1D4ED8 100%)",
+              },
+              {
+                label: "Device Integrity Score",
+                value: `${healthRate}%`,
+                detail: `${totalHealthy} of ${devices.length} devices reporting healthy`,
+                bg: "linear-gradient(135deg, #10B981 0%, #047857 100%)",
+              },
             ].map((card, i) => (
               <div
                 key={i}
@@ -740,10 +879,14 @@ export const ReportHub = ({ view }: ReportHubProps) => {
                 style={{ background: card.bg }}
               >
                 <div>
-                  <p className="text-[10px] font-black text-white/70 uppercase tracking-widest">{card.label}</p>
+                  <p className="text-[10px] font-black text-white/70 uppercase tracking-widest">
+                    {card.label}
+                  </p>
                   <p className="text-3xl font-black mt-2">{card.value}</p>
                 </div>
-                <p className="text-xs text-white/80 font-bold mt-4 border-t border-white/20 pt-2">{card.detail}</p>
+                <p className="text-xs text-white/80 font-bold mt-4 border-t border-white/20 pt-2">
+                  {card.detail}
+                </p>
               </div>
             ))}
           </div>
@@ -752,11 +895,15 @@ export const ReportHub = ({ view }: ReportHubProps) => {
           {anomalies.length > 0 && (
             <div className="bg-amber-50 border border-amber-200 rounded-2xl p-5 mb-6">
               <h3 className="text-xs font-black text-amber-800 uppercase tracking-widest flex items-center gap-2 mb-3">
-                <AlertTriangle size={15} /> Allocation Anomalies & Missing Hardware ({anomalies.length})
+                <AlertTriangle size={15} /> Allocation Anomalies & Missing Hardware (
+                {anomalies.length})
               </h3>
               <div className="space-y-1.5">
                 {anomalies.map((item, index) => (
-                  <p key={index} className="text-xs font-bold text-amber-700 flex items-start gap-2">
+                  <p
+                    key={index}
+                    className="text-xs font-bold text-amber-700 flex items-start gap-2"
+                  >
                     <span className="mt-0.5">•</span>
                     <span>{item}</span>
                   </p>
@@ -769,7 +916,8 @@ export const ReportHub = ({ view }: ReportHubProps) => {
           <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
               <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                <Activity size={15} className="text-indigo-500" /> Complete Device Registry & Connectivity Audit
+                <Activity size={15} className="text-indigo-500" /> Complete Device Registry &
+                Connectivity Audit
               </h3>
               <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
                 <div className="relative flex-grow sm:flex-grow-0">
@@ -819,19 +967,31 @@ export const ReportHub = ({ view }: ReportHubProps) => {
                     filteredDevices.map((d) => {
                       const type = d.device_type || (d.sim_number ? "GPS" : "Beacon");
                       const battery = d.battery_level;
-                      const batteryClass = battery === undefined ? "text-slate-400" :
-                        battery <= 20 ? "text-red-500 font-extrabold animate-pulse" :
-                        battery <= 50 ? "text-amber-500" : "text-emerald-500";
+                      const batteryClass =
+                        battery === undefined
+                          ? "text-slate-400"
+                          : battery <= 20
+                            ? "text-red-500 font-extrabold animate-pulse"
+                            : battery <= 50
+                              ? "text-amber-500"
+                              : "text-emerald-500";
 
                       return (
-                        <tr key={d.device_id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                        <tr
+                          key={d.device_id}
+                          className="border-b border-slate-50 hover:bg-slate-50 transition-colors"
+                        >
                           <td className="py-3 px-4 font-mono text-slate-800">{d.device_id}</td>
                           <td className="py-3 px-4">
-                            <span className={`px-2 py-0.5 rounded text-[9px] uppercase font-black ${type === "GPS" ? "bg-purple-50 text-purple-600 border border-purple-200" : "bg-blue-50 text-blue-600 border border-blue-200"}`}>
+                            <span
+                              className={`px-2 py-0.5 rounded text-[9px] uppercase font-black ${type === "GPS" ? "bg-purple-50 text-purple-600 border border-purple-200" : "bg-blue-50 text-blue-600 border border-blue-200"}`}
+                            >
                               {type}
                             </span>
                           </td>
-                          <td className="py-3 px-4 font-mono text-slate-500">{d.sim_number || d.sequence_id || "—"}</td>
+                          <td className="py-3 px-4 font-mono text-slate-500">
+                            {d.sim_number || d.sequence_id || "—"}
+                          </td>
                           <td className="py-3 px-4">
                             {d.assigned_to_name ? (
                               <span className="text-slate-800">{d.assigned_to_name}</span>
@@ -849,13 +1009,19 @@ export const ReportHub = ({ view }: ReportHubProps) => {
                             )}
                           </td>
                           <td className="py-3 px-4">
-                            <span className={`px-2 py-0.5 rounded text-[9px] uppercase font-black ${d.device_health === "healthy" ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : "bg-red-50 text-red-600 border border-red-100"}`}>
+                            <span
+                              className={`px-2 py-0.5 rounded text-[9px] uppercase font-black ${d.device_health === "healthy" ? "bg-emerald-50 text-emerald-600 border border-emerald-100" : "bg-red-50 text-red-600 border border-red-100"}`}
+                            >
                               {d.device_health || "healthy"}
                             </span>
                           </td>
                           <td className="py-3 px-4">
-                            <span className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] uppercase font-black ${d.status === "active" || d.is_active ? "text-emerald-600 bg-emerald-50" : "text-slate-500 bg-slate-100"}`}>
-                              <span className={`w-1.5 h-1.5 rounded-full ${d.status === "active" || d.is_active ? "bg-emerald-500" : "bg-slate-400"}`} />
+                            <span
+                              className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] uppercase font-black ${d.status === "active" || d.is_active ? "text-emerald-600 bg-emerald-50" : "text-slate-500 bg-slate-100"}`}
+                            >
+                              <span
+                                className={`w-1.5 h-1.5 rounded-full ${d.status === "active" || d.is_active ? "bg-emerald-500" : "bg-slate-400"}`}
+                              />
                               {d.status || (d.is_active ? "active" : "inactive")}
                             </span>
                           </td>
@@ -909,8 +1075,13 @@ export const ReportHub = ({ view }: ReportHubProps) => {
     let criticalCount = 0;
     let warningCount = 0;
 
-    vehicles.forEach(v => {
-      const dates = [v.insurance_expiry_date, v.fitness_expiry_date, v.pollution_expiry_date, v.permit_expiry_date];
+    vehicles.forEach((v) => {
+      const dates = [
+        v.insurance_expiry_date,
+        v.fitness_expiry_date,
+        v.pollution_expiry_date,
+        v.permit_expiry_date,
+      ];
       const expired = dates.some(isExpired);
       const soon = dates.some(isExpiringSoon);
 
@@ -924,11 +1095,18 @@ export const ReportHub = ({ view }: ReportHubProps) => {
 
     return (
       <div className="min-h-screen bg-[#F8FAFC] pb-12 font-[var(--font-manrope)] relative">
-        <PageHeader title="Compliance & Audit Report" icon={<ShieldCheck size={18} />} breadcrumb="Admin / Reports / Compliance" />
+        <PageHeader
+          title="Compliance & Audit Report"
+          icon={<ShieldCheck size={18} />}
+          breadcrumb="Admin / Reports / Compliance"
+        />
 
         <div className="max-w-[1100px] mx-auto px-6 mt-6">
           <div className="flex justify-between items-center mb-6">
-            <button onClick={() => navigate("/reports")} className="btn btn-secondary flex items-center gap-2 hover:bg-slate-100 transition-colors">
+            <button
+              onClick={() => navigate("/reports")}
+              className="btn btn-secondary flex items-center gap-2 hover:bg-slate-100 transition-colors"
+            >
               <ArrowLeft size={16} /> Back to Hub
             </button>
             <div className="flex items-center gap-2">
@@ -942,9 +1120,12 @@ export const ReportHub = ({ view }: ReportHubProps) => {
               <Button
                 className="flex items-center gap-2 shadow-sm"
                 variant="default"
-                onClick={complianceTab === "docs" ? exportComplianceToPdf : exportComplianceLogsToPdf}
+                onClick={
+                  complianceTab === "docs" ? exportComplianceToPdf : exportComplianceLogsToPdf
+                }
               >
-                <Download size={16} /> Download {complianceTab === "docs" ? "Expiries PDF" : "Audits PDF"}
+                <Download size={16} /> Download{" "}
+                {complianceTab === "docs" ? "Expiries PDF" : "Audits PDF"}
               </Button>
             </div>
           </div>
@@ -952,17 +1133,44 @@ export const ReportHub = ({ view }: ReportHubProps) => {
           {/* Compliance Stats Row */}
           <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             {[
-              { label: "Compliant Fleet", value: compliantCount, bg: "bg-emerald-50 text-emerald-600 border-emerald-100", icon: CheckCircle2 },
-              { label: "Critical Expiries", value: criticalCount, bg: "bg-red-50 text-red-600 border-red-100", icon: ShieldAlert },
-              { label: "Expiring Soon (30d)", value: warningCount, bg: "bg-amber-50 text-amber-600 border-amber-100", icon: AlertTriangle },
-              { label: "Compliance Score", value: `${auditScore}%`, bg: "bg-blue-50 text-blue-600 border-blue-100", icon: ShieldCheck },
+              {
+                label: "Compliant Fleet",
+                value: compliantCount,
+                bg: "bg-emerald-50 text-emerald-600 border-emerald-100",
+                icon: CheckCircle2,
+              },
+              {
+                label: "Critical Expiries",
+                value: criticalCount,
+                bg: "bg-red-50 text-red-600 border-red-100",
+                icon: ShieldAlert,
+              },
+              {
+                label: "Expiring Soon (30d)",
+                value: warningCount,
+                bg: "bg-amber-50 text-amber-600 border-amber-100",
+                icon: AlertTriangle,
+              },
+              {
+                label: "Compliance Score",
+                value: `${auditScore}%`,
+                bg: "bg-blue-50 text-blue-600 border-blue-100",
+                icon: ShieldCheck,
+              },
             ].map((metric, i) => (
-              <div key={i} className={`p-4 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center gap-4`}>
-                <div className={`w-10 h-10 rounded-xl flex items-center justify-center ${metric.bg} border`}>
+              <div
+                key={i}
+                className={`p-4 rounded-2xl bg-white border border-slate-100 shadow-sm flex items-center gap-4`}
+              >
+                <div
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center ${metric.bg} border`}
+                >
                   <metric.icon size={20} />
                 </div>
                 <div>
-                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">{metric.label}</p>
+                  <p className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                    {metric.label}
+                  </p>
                   <p className="text-xl font-black text-slate-800">{metric.value}</p>
                 </div>
               </div>
@@ -976,14 +1184,18 @@ export const ReportHub = ({ view }: ReportHubProps) => {
               className={`pb-3 text-xs font-black uppercase tracking-wider transition-colors relative ${complianceTab === "docs" ? "text-emerald-600" : "text-slate-400 hover:text-slate-600"}`}
             >
               Vehicle Document Expiries
-              {complianceTab === "docs" && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500 rounded-full" />}
+              {complianceTab === "docs" && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500 rounded-full" />
+              )}
             </button>
             <button
               onClick={() => setComplianceTab("audits")}
               className={`pb-3 text-xs font-black uppercase tracking-wider transition-colors relative ${complianceTab === "audits" ? "text-emerald-600" : "text-slate-400 hover:text-slate-600"}`}
             >
               Recorded Compliance Audits & Logs
-              {complianceTab === "audits" && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500 rounded-full" />}
+              {complianceTab === "audits" && (
+                <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-emerald-500 rounded-full" />
+              )}
             </button>
           </div>
 
@@ -1010,15 +1222,26 @@ export const ReportHub = ({ view }: ReportHubProps) => {
                         if (!dateStr) return <span className="text-slate-400">—</span>;
                         const date = new Date(dateStr);
                         if (isExpired(dateStr)) {
-                          return <span className="text-red-500 font-black flex items-center gap-1">⚠ {date.toLocaleDateString()} (Expired)</span>;
+                          return (
+                            <span className="text-red-500 font-black flex items-center gap-1">
+                              ⚠ {date.toLocaleDateString()} (Expired)
+                            </span>
+                          );
                         }
                         if (isExpiringSoon(dateStr)) {
-                          return <span className="text-amber-500 font-extrabold">{date.toLocaleDateString()} (Due Soon)</span>;
+                          return (
+                            <span className="text-amber-500 font-extrabold">
+                              {date.toLocaleDateString()} (Due Soon)
+                            </span>
+                          );
                         }
                         return <span className="text-slate-700">{date.toLocaleDateString()}</span>;
                       };
                       return (
-                        <tr key={v.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                        <tr
+                          key={v.id}
+                          className="border-b border-slate-50 hover:bg-slate-50 transition-colors"
+                        >
                           <td className="py-3 px-4 text-slate-800">{v.vehicle_number}</td>
                           <td className="py-3 px-4">{formatDate(v.insurance_expiry_date)}</td>
                           <td className="py-3 px-4">{formatDate(v.fitness_expiry_date)}</td>
@@ -1037,7 +1260,8 @@ export const ReportHub = ({ view }: ReportHubProps) => {
           {complianceTab === "audits" && (
             <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm">
               <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-4 flex items-center gap-2">
-                <CheckCircle2 size={15} className="text-emerald-500" /> Active RTO & Safety Compliance Audits
+                <CheckCircle2 size={15} className="text-emerald-500" /> Active RTO & Safety
+                Compliance Audits
               </h3>
               <div className="overflow-x-auto">
                 <table className="w-full text-left text-xs font-bold text-slate-600">
@@ -1055,18 +1279,31 @@ export const ReportHub = ({ view }: ReportHubProps) => {
                   <tbody>
                     {complianceLogs.length ? (
                       complianceLogs.map((log) => (
-                        <tr key={log.id} className="border-b border-slate-50 hover:bg-slate-50 transition-colors">
+                        <tr
+                          key={log.id}
+                          className="border-b border-slate-50 hover:bg-slate-50 transition-colors"
+                        >
                           <td className="py-3 px-4 text-slate-800">{log.document_name}</td>
                           <td className="py-3 px-4">{log.category}</td>
-                          <td className="py-3 px-4 font-mono text-slate-500">{log.registration_number}</td>
+                          <td className="py-3 px-4 font-mono text-slate-500">
+                            {log.registration_number}
+                          </td>
                           <td className="py-3 px-4 text-slate-500">{log.authority_name}</td>
-                          <td className="py-3 px-4">{log.date_recorded ? new Date(log.date_recorded).toLocaleDateString() : "—"}</td>
                           <td className="py-3 px-4">
-                            <span className={`px-2 py-0.5 rounded text-[9px] uppercase font-black ${log.status === "Compliant" ? "bg-emerald-50 text-emerald-600 border border-emerald-200" : "bg-amber-50 text-amber-600 border border-amber-200"}`}>
+                            {log.date_recorded
+                              ? new Date(log.date_recorded).toLocaleDateString()
+                              : "—"}
+                          </td>
+                          <td className="py-3 px-4">
+                            <span
+                              className={`px-2 py-0.5 rounded text-[9px] uppercase font-black ${log.status === "Compliant" ? "bg-emerald-50 text-emerald-600 border border-emerald-200" : "bg-amber-50 text-amber-600 border border-amber-200"}`}
+                            >
                               {log.status}
                             </span>
                           </td>
-                          <td className="py-3 px-4 text-slate-400 font-normal italic max-w-[200px] truncate">{log.remarks || "—"}</td>
+                          <td className="py-3 px-4 text-slate-400 font-normal italic max-w-[200px] truncate">
+                            {log.remarks || "—"}
+                          </td>
                         </tr>
                       ))
                     ) : (
@@ -1089,7 +1326,8 @@ export const ReportHub = ({ view }: ReportHubProps) => {
             <div className="bg-white rounded-3xl w-full max-w-lg border border-slate-100 shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200">
               <div className="px-6 py-4 bg-slate-50 border-b border-slate-100 flex justify-between items-center">
                 <h2 className="text-sm font-black text-slate-800 uppercase tracking-widest flex items-center gap-2">
-                  <ShieldCheck size={16} className="text-emerald-500" /> Log Regulatory Compliance Audit
+                  <ShieldCheck size={16} className="text-emerald-500" /> Log Regulatory Compliance
+                  Audit
                 </h2>
                 <button
                   onClick={() => setModalOpen(false)}
@@ -1102,21 +1340,25 @@ export const ReportHub = ({ view }: ReportHubProps) => {
               <form onSubmit={handleAddCompliance} className="p-6 space-y-4">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Document Name *</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                      Document Name *
+                    </label>
                     <input
                       type="text"
                       required
                       value={formName}
-                      onChange={e => setFormName(e.target.value)}
+                      onChange={(e) => setFormName(e.target.value)}
                       placeholder="e.g., School Bus Permit Check"
                       className="w-full px-3 py-2 text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-400 focus:bg-white"
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Category</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                      Category
+                    </label>
                     <select
                       value={formCategory}
-                      onChange={e => setFormCategory(e.target.value)}
+                      onChange={(e) => setFormCategory(e.target.value)}
                       className="w-full px-3 py-2 text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-400 focus:bg-white"
                     >
                       <option value="Safety Audit">Safety Audit</option>
@@ -1130,22 +1372,26 @@ export const ReportHub = ({ view }: ReportHubProps) => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Registration / Ref Number *</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                      Registration / Ref Number *
+                    </label>
                     <input
                       type="text"
                       required
                       value={formRegNum}
-                      onChange={e => setFormRegNum(e.target.value)}
+                      onChange={(e) => setFormRegNum(e.target.value)}
                       placeholder="e.g., REG-998123"
                       className="w-full px-3 py-2 text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-400 focus:bg-white"
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Sub-law Reference</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                      Sub-law Reference
+                    </label>
                     <input
                       type="text"
                       value={formSubLaw}
-                      onChange={e => setFormSubLaw(e.target.value)}
+                      onChange={(e) => setFormSubLaw(e.target.value)}
                       placeholder="e.g., Section 135 MV Act"
                       className="w-full px-3 py-2 text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-400 focus:bg-white"
                     />
@@ -1154,22 +1400,26 @@ export const ReportHub = ({ view }: ReportHubProps) => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Authority Name *</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                      Authority Name *
+                    </label>
                     <input
                       type="text"
                       required
                       value={formAuthority}
-                      onChange={e => setFormAuthority(e.target.value)}
+                      onChange={(e) => setFormAuthority(e.target.value)}
                       placeholder="e.g., Karnataka Transport Dept"
                       className="w-full px-3 py-2 text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-400 focus:bg-white"
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Authority Contact</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                      Authority Contact
+                    </label>
                     <input
                       type="text"
                       value={formContact}
-                      onChange={e => setFormContact(e.target.value)}
+                      onChange={(e) => setFormContact(e.target.value)}
                       placeholder="e.g., 080-2224433"
                       className="w-full px-3 py-2 text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-400 focus:bg-white"
                     />
@@ -1178,20 +1428,24 @@ export const ReportHub = ({ view }: ReportHubProps) => {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Date Recorded *</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                      Date Recorded *
+                    </label>
                     <input
                       type="date"
                       required
                       value={formDate}
-                      onChange={e => setFormDate(e.target.value)}
+                      onChange={(e) => setFormDate(e.target.value)}
                       className="w-full px-3 py-2 text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-400 focus:bg-white"
                     />
                   </div>
                   <div className="space-y-1">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Status</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                      Status
+                    </label>
                     <select
                       value={formStatus}
-                      onChange={e => setFormStatus(e.target.value)}
+                      onChange={(e) => setFormStatus(e.target.value)}
                       className="w-full px-3 py-2 text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-400 focus:bg-white"
                     >
                       <option value="Compliant">Compliant</option>
@@ -1202,11 +1456,13 @@ export const ReportHub = ({ view }: ReportHubProps) => {
                 </div>
 
                 <div className="space-y-1">
-                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Remarks / Notes</label>
+                  <label className="text-[10px] font-black text-slate-400 uppercase tracking-wider">
+                    Remarks / Notes
+                  </label>
                   <textarea
                     rows={2}
                     value={formRemarks}
-                    onChange={e => setFormRemarks(e.target.value)}
+                    onChange={(e) => setFormRemarks(e.target.value)}
                     placeholder="Provide additional details or inspection outcomes..."
                     className="w-full px-3 py-2 text-xs font-bold text-slate-700 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-emerald-400 focus:bg-white resize-none"
                   />
@@ -1226,7 +1482,13 @@ export const ReportHub = ({ view }: ReportHubProps) => {
                     disabled={submitting}
                     className="px-5 py-2 text-xs font-bold flex items-center gap-1.5"
                   >
-                    {submitting ? "Saving..." : <><Check size={14} /> Save Record</>}
+                    {submitting ? (
+                      "Saving..."
+                    ) : (
+                      <>
+                        <Check size={14} /> Save Record
+                      </>
+                    )}
                   </Button>
                 </div>
               </form>
@@ -1242,10 +1504,10 @@ export const ReportHub = ({ view }: ReportHubProps) => {
      ─────────────────────────────────────────────── */
   return (
     <>
-      <PageHeader 
-        title="AI Analytics & Reports" 
-        icon={<BarChart2 size={20} />} 
-        breadcrumb="Admin / Intelligence & Reports" 
+      <PageHeader
+        title="AI Analytics & Reports"
+        icon={<BarChart2 size={20} />}
+        breadcrumb="Admin / Intelligence & Reports"
       />
 
       <div className="page-body" style={{ background: "#F8FAFC" }}>
@@ -1255,7 +1517,8 @@ export const ReportHub = ({ view }: ReportHubProps) => {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5 }}
           style={{
-            background: "linear-gradient(135deg, #6458dfff 0%, hsla(242, 44%, 66%, 1.00) 50%, #a384d3ff 100%)",
+            background:
+              "linear-gradient(135deg, #6458dfff 0%, hsla(242, 44%, 66%, 1.00) 50%, #a384d3ff 100%)",
             borderRadius: 20,
             padding: "36px 32px",
             position: "relative",
@@ -1340,7 +1603,8 @@ export const ReportHub = ({ view }: ReportHubProps) => {
                 maxWidth: 520,
               }}
             >
-              Select a report tier below to view live auto-generated analytics, age demographics, expiries, and fleet KPIs compiled directly from your system.
+              Select a report tier below to view live auto-generated analytics, age demographics,
+              expiries, and fleet KPIs compiled directly from your system.
             </p>
             {/* Quick stats row */}
             <div style={{ display: "flex", gap: 20, flexWrap: "wrap" }}>

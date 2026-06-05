@@ -61,7 +61,7 @@ export const useToolkit = (): Toolkit => {
   const can = (permission: string): boolean => {
     if (!permission) return false;
     // Wildcard support: if user has '*', they can do anything
-    if (normalizedPermissions.includes('*')) return true;
+    if (normalizedPermissions.includes("*")) return true;
     const key = normalize(permission);
     return normalizedPermissions.includes(key);
   };
@@ -141,37 +141,40 @@ export const HasAnyRole = ({ roles, children }: HasAnyRoleProps) => {
   return { children };
 };
 
-
 // date time formatters ---------------
 
 export const formatDate = (dateString: string | null | undefined) => {
   if (!dateString) return "-";
   const date = new Date(dateString);
-  return date.toLocaleDateString('en-GB', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric'
-  }).toUpperCase();
+  return date
+    .toLocaleDateString("en-GB", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+    })
+    .toUpperCase();
 };
-
 
 export const formatDateTime = (dateString: string | null) => {
   if (!dateString) return "-";
-  return new Date(dateString).toLocaleString('en-US', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: true
-  }).toUpperCase();
+  return new Date(dateString)
+    .toLocaleString("en-US", {
+      day: "2-digit",
+      month: "short",
+      year: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: true,
+    })
+    .toUpperCase();
 };
 
-
-export  const formatTime = (isoString: string) => {
-    try {
-      return new Date(isoString).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } catch (e) { return "--:--"; }
-  };
+export const formatTime = (isoString: string) => {
+  try {
+    return new Date(isoString).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch (e) {
+    return "--:--";
+  }
+};
 
 export const DUMMY_USER_IMAGE = "/user.jpeg";

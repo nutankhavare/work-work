@@ -35,10 +35,7 @@ const SearchHeader: React.FC<HeaderProps> = ({
       <div className="flex items-center gap-4">
         {/* Conditionally render the SearchComponent if props are provided */}
         {showSearch && onSearch && (
-          <SearchComponent
-            onSearch={onSearch}
-            placeholder={searchPlaceholder}
-          />
+          <SearchComponent onSearch={onSearch} placeholder={searchPlaceholder} />
         )}
 
         {/* The existing button logic remains the same */}

@@ -30,7 +30,15 @@ export const Pagination = ({
     if (currentPage <= 4) {
       pages.push(1, 2, 3, 4, 5, "...", totalPages);
     } else if (currentPage >= totalPages - 3) {
-      pages.push(1, "...", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+      pages.push(
+        1,
+        "...",
+        totalPages - 4,
+        totalPages - 3,
+        totalPages - 2,
+        totalPages - 1,
+        totalPages,
+      );
     } else {
       pages.push(1, "...", currentPage - 1, currentPage, currentPage + 1, "...", totalPages);
     }
@@ -44,10 +52,10 @@ export const Pagination = ({
       {/* Left — Showing info */}
       <span className="text-[12px] font-[700] text-[#94a3b8]">
         Showing{" "}
-        <span className="font-[900] text-[#475569]">{totalItems === 0 ? 0 : from}–{to}</span>
-        {" "}of{" "}
-        <span className="font-[900] text-[#475569]">{totalItems}</span>
-        {" "}{itemName}
+        <span className="font-[900] text-[#475569]">
+          {totalItems === 0 ? 0 : from}–{to}
+        </span>{" "}
+        of <span className="font-[900] text-[#475569]">{totalItems}</span> {itemName}
       </span>
 
       {/* Right — Page buttons */}
@@ -83,7 +91,7 @@ export const Pagination = ({
             >
               {p}
             </button>
-          )
+          ),
         )}
 
         {/* Next */}

@@ -20,7 +20,7 @@ import {
   Hash,
   AlertCircle,
   Heart,
-  Cpu
+  Cpu,
 } from "lucide-react";
 
 // Components
@@ -57,7 +57,9 @@ const SectionCard = ({
 /* ── Field Row ── */
 const Field = ({ label, value }: { label: string; value?: string | null }) => (
   <div className="py-3 border-b border-[#f8fafc] last:border-0">
-    <p className="text-[10px] font-[900] text-[#94a3b8] uppercase tracking-[0.08em] mb-1">{label}</p>
+    <p className="text-[10px] font-[900] text-[#94a3b8] uppercase tracking-[0.08em] mb-1">
+      {label}
+    </p>
     <p className="text-[13.5px] font-[700] text-[#1e293b]">{value || "—"}</p>
   </div>
 );
@@ -80,7 +82,9 @@ const StaffShowPage = () => {
     const fetchStaff = async () => {
       try {
         setLoading(true);
-        const response = await tenantApi.get<{ success: boolean; data: Employee }>(`/employees/${id}`);
+        const response = await tenantApi.get<{ success: boolean; data: Employee }>(
+          `/employees/${id}`,
+        );
         if (response.data.success) setStaff(response.data.data);
       } catch (err: any) {
         setError(err.message || "Failed to load staff member.");
@@ -92,52 +96,62 @@ const StaffShowPage = () => {
   }, [id]);
 
   /* ── PDF Export Builder ── */
-  const buildIndividualPdf = useCallback((emp: Employee) => (opts: any) => {
-    const doc = new jsPDF();
-    const pw = doc.internal.pageSize.getWidth();
-    
-    doc.setFillColor(124, 58, 237);
-    doc.rect(0, 0, pw, 45, "F");
+  const buildIndividualPdf = useCallback(
+    (emp: Employee) => (opts: any) => {
+      const doc = new jsPDF();
+      const pw = doc.internal.pageSize.getWidth();
 
-    if (opts.logo) {
-      try { doc.addImage(opts.logo, "PNG", 14, 10, 25, 25); } catch(e){}
-    }
-    
-    const startX = opts.logo ? 45 : 20;
-    doc.setFontSize(22);
-    doc.setTextColor(255);
-    doc.text(opts.companyName || `${emp.first_name} ${emp.last_name}`, startX, 22);
-    
-    doc.setFontSize(11);
-    doc.setTextColor(220, 210, 255);
-    doc.text(opts.subtitle || `Employee ID: ${emp.employee_id || 'N/A'}  |  ${emp.designation || 'Staff Member'}`, startX, 32);
+      doc.setFillColor(124, 58, 237);
+      doc.rect(0, 0, pw, 45, "F");
 
-    let y = 60;
-    const field = (label: string, value: string) => {
-      doc.setFontSize(9);
-      doc.setTextColor(148, 163, 184);
-      doc.text(label, 20, y);
-      doc.setFontSize(10);
-      doc.setTextColor(30, 41, 59);
-      doc.text(value || "—", 70, y);
-      y += 10;
-    };
+      if (opts.logo) {
+        try {
+          doc.addImage(opts.logo, "PNG", 14, 10, 25, 25);
+        } catch (e) {}
+      }
 
-    field("Full Name:", `${emp.first_name} ${emp.last_name}`);
-    field("Employee ID:", emp.employee_id || "-");
-    field("Email Address:", emp.email || "-");
-    field("Department:", emp.department || "-");
-    field("Designation:", emp.designation || "-");
-    field("Phone Number:", emp.phone || "-");
-    field("Status:", (emp.status || "-").toUpperCase());
+      const startX = opts.logo ? 45 : 20;
+      doc.setFontSize(22);
+      doc.setTextColor(255);
+      doc.text(opts.companyName || `${emp.first_name} ${emp.last_name}`, startX, 22);
 
-    const ph = doc.internal.pageSize.getHeight();
-    doc.setFontSize(8);
-    doc.setTextColor(150);
-    doc.text(opts.footerText || "Personnel Record", 20, ph - 15);
+      doc.setFontSize(11);
+      doc.setTextColor(220, 210, 255);
+      doc.text(
+        opts.subtitle ||
+          `Employee ID: ${emp.employee_id || "N/A"}  |  ${emp.designation || "Staff Member"}`,
+        startX,
+        32,
+      );
 
-    return doc;
-  }, []);
+      let y = 60;
+      const field = (label: string, value: string) => {
+        doc.setFontSize(9);
+        doc.setTextColor(148, 163, 184);
+        doc.text(label, 20, y);
+        doc.setFontSize(10);
+        doc.setTextColor(30, 41, 59);
+        doc.text(value || "—", 70, y);
+        y += 10;
+      };
+
+      field("Full Name:", `${emp.first_name} ${emp.last_name}`);
+      field("Employee ID:", emp.employee_id || "-");
+      field("Email Address:", emp.email || "-");
+      field("Department:", emp.department || "-");
+      field("Designation:", emp.designation || "-");
+      field("Phone Number:", emp.phone || "-");
+      field("Status:", (emp.status || "-").toUpperCase());
+
+      const ph = doc.internal.pageSize.getHeight();
+      doc.setFontSize(8);
+      doc.setTextColor(150);
+      doc.text(opts.footerText || "Personnel Record", 20, ph - 15);
+
+      return doc;
+    },
+    [],
+  );
 
   /* ─── Loading / Error States ─── */
   if (loading)
@@ -170,7 +184,6 @@ const StaffShowPage = () => {
 
   return (
     <div className="min-h-screen bg-[#fafbff] font-[var(--font-manrope)]">
-
       {/* ── Sticky Top Bar ── */}
       <div className="sticky top-0 z-30 bg-white/80 backdrop-blur-md border-b border-[#eef2f6] px-6 py-4">
         <div className="max-w-7xl mx-auto flex items-center justify-between">
@@ -201,7 +214,6 @@ const StaffShowPage = () => {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-8">
-
         {/* ── Hero Card ── */}
         <motion.div
           initial={{ opacity: 0, y: -20 }}
@@ -210,7 +222,12 @@ const StaffShowPage = () => {
         >
           {/* Gradient Banner */}
           <div className="h-28 bg-gradient-to-r from-[#7c3aed] via-[#8b5cf6] to-[#a855f7] relative">
-            <div className="absolute inset-0 opacity-20" style={{ backgroundImage: "radial-gradient(circle at 20% 80%, white 0%, transparent 50%)" }} />
+            <div
+              className="absolute inset-0 opacity-20"
+              style={{
+                backgroundImage: "radial-gradient(circle at 20% 80%, white 0%, transparent 50%)",
+              }}
+            />
           </div>
 
           <div className="px-8 pb-8 relative">
@@ -218,11 +235,18 @@ const StaffShowPage = () => {
             <div className="flex flex-col sm:flex-row items-start sm:items-end gap-5 -mt-14">
               <div className="relative">
                 <img
-                  src={staff.photo ? (staff.photo.startsWith('http') ? staff.photo : `${tenantAsset}${staff.photo}`) : DUMMY_USER_IMAGE}
+                  src={
+                    staff.photo
+                      ? staff.photo.startsWith("http")
+                        ? staff.photo
+                        : `${tenantAsset}${staff.photo}`
+                      : DUMMY_USER_IMAGE
+                  }
                   alt={staff.first_name}
                   className="w-28 h-28 rounded-[20px] object-cover border-4 border-white shadow-xl bg-[#ede9fe]"
                   onError={(e) => {
-                    (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${staff.first_name}+${staff.last_name}&background=ede9fe&color=7c3aed&bold=true&size=112`;
+                    (e.target as HTMLImageElement).src =
+                      `https://ui-avatars.com/api/?name=${staff.first_name}+${staff.last_name}&background=ede9fe&color=7c3aed&bold=true&size=112`;
                   }}
                 />
                 <div
@@ -234,10 +258,11 @@ const StaffShowPage = () => {
 
               <div className="flex-1 pt-2 sm:pt-0">
                 <h1 className="text-[22px] font-[900] text-[#1e293b] leading-tight">
-                  {staff.first_name}{" "}
-                  <span className="text-[#7c3aed]">{staff.last_name}</span>
+                  {staff.first_name} <span className="text-[#7c3aed]">{staff.last_name}</span>
                 </h1>
-                <p className="text-[#64748b] font-[700] text-[13px] mt-1">{staff.designation || "Staff Member"}</p>
+                <p className="text-[#64748b] font-[700] text-[13px] mt-1">
+                  {staff.designation || "Staff Member"}
+                </p>
                 <div className="flex flex-wrap items-center gap-2 mt-3">
                   <span
                     className={`px-3 py-1.5 rounded-full text-[10.5px] font-[900] uppercase tracking-wider border ${
@@ -306,16 +331,22 @@ const StaffShowPage = () => {
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.25 }}
           >
-
             {/* TAB 1 — DETAILS */}
             {activeTab === "details" && (
               <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                 {/* Personal Info */}
-                <SectionCard icon={User} title="Personal Information" colorClass="bg-[#fafbff] text-[#7c3aed]">
+                <SectionCard
+                  icon={User}
+                  title="Personal Information"
+                  colorClass="bg-[#fafbff] text-[#7c3aed]"
+                >
                   <Field label="First Name" value={staff.first_name} />
                   <Field label="Last Name" value={staff.last_name} />
                   <Field label="Gender" value={staff.gender} />
-                  <Field label="Date of Birth" value={staff.date_of_birth ? formatDate(staff.date_of_birth) : undefined} />
+                  <Field
+                    label="Date of Birth"
+                    value={staff.date_of_birth ? formatDate(staff.date_of_birth) : undefined}
+                  />
                   <Field label="Marital Status" value={staff.marital_status} />
                   <Field label="Mobile" value={staff.phone} />
                   <Field label="Official Email" value={staff.email} />
@@ -323,18 +354,33 @@ const StaffShowPage = () => {
                 </SectionCard>
 
                 {/* Professional Info */}
-                <SectionCard icon={Briefcase} title="Professional Info" colorClass="bg-[#fafbff] text-[#3b82f6]">
+                <SectionCard
+                  icon={Briefcase}
+                  title="Professional Info"
+                  colorClass="bg-[#fafbff] text-[#3b82f6]"
+                >
                   <Field label="Employee ID" value={staff.employee_id} />
                   <Field label="Designation" value={staff.designation} />
                   <Field label="Employment Type" value={staff.employment_type} />
-                  <Field label="Joining Date" value={staff.joining_date ? formatDate(staff.joining_date) : undefined} />
-                  <Field label="Account Status" value={staff.status ? staff.status.toUpperCase() : undefined} />
+                  <Field
+                    label="Joining Date"
+                    value={staff.joining_date ? formatDate(staff.joining_date) : undefined}
+                  />
+                  <Field
+                    label="Account Status"
+                    value={staff.status ? staff.status.toUpperCase() : undefined}
+                  />
                   {staff.roles && staff.roles.length > 0 && (
                     <div className="pt-4 mt-2 border-t border-[#f1f5f9]">
-                      <p className="text-[10px] font-[900] text-[#94a3b8] uppercase tracking-wider mb-3">Assigned Roles</p>
+                      <p className="text-[10px] font-[900] text-[#94a3b8] uppercase tracking-wider mb-3">
+                        Assigned Roles
+                      </p>
                       <div className="flex flex-wrap gap-2">
                         {staff.roles.map((role, i) => (
-                          <span key={i} className="px-3 py-1.5 bg-[#ede9fe] text-[#7c3aed] text-[11px] font-[900] rounded-[8px] uppercase border border-[#ddd6fe]">
+                          <span
+                            key={i}
+                            className="px-3 py-1.5 bg-[#ede9fe] text-[#7c3aed] text-[11px] font-[900] rounded-[8px] uppercase border border-[#ddd6fe]"
+                          >
                             {role}
                           </span>
                         ))}
@@ -344,7 +390,11 @@ const StaffShowPage = () => {
                 </SectionCard>
 
                 {/* Bank Details */}
-                <SectionCard icon={Landmark} title="Bank Details" colorClass="bg-[#fafbff] text-[#d97706]">
+                <SectionCard
+                  icon={Landmark}
+                  title="Bank Details"
+                  colorClass="bg-[#fafbff] text-[#d97706]"
+                >
                   <Field label="Bank Name" value={staff.bank_name} />
                   <Field label="Account Holder" value={staff.account_holder_name} />
                   <Field label="Account Number" value={staff.account_number} />
@@ -353,7 +403,11 @@ const StaffShowPage = () => {
 
                 {/* Address — Full Width */}
                 <div className="lg:col-span-3">
-                  <SectionCard icon={MapPin} title="Address Details" colorClass="bg-[#fafbff] text-[#059669]">
+                  <SectionCard
+                    icon={MapPin}
+                    title="Address Details"
+                    colorClass="bg-[#fafbff] text-[#059669]"
+                  >
                     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-x-6">
                       <Field label="Address Line 1" value={staff.address_line_1} />
                       <Field label="Address Line 2" value={staff.address_line_2} />
@@ -372,12 +426,21 @@ const StaffShowPage = () => {
             {activeTab === "dependants" && (
               <div className="space-y-6">
                 {/* Dependants */}
-                <SectionCard icon={Heart} title="Dependants" colorClass="bg-[#fafbff] text-[#f43f5e]">
+                <SectionCard
+                  icon={Heart}
+                  title="Dependants"
+                  colorClass="bg-[#fafbff] text-[#f43f5e]"
+                >
                   {staff.dependants && staff.dependants.length > 0 ? (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                       {staff.dependants.map((dep, i) => (
-                        <div key={i} className="p-5 bg-[#fafbff] rounded-[14px] border border-[#f1f5f9]">
-                          <p className="text-[10px] font-[900] text-[#7c3aed] uppercase tracking-wider mb-3">Dependant {i + 1}</p>
+                        <div
+                          key={i}
+                          className="p-5 bg-[#fafbff] rounded-[14px] border border-[#f1f5f9]"
+                        >
+                          <p className="text-[10px] font-[900] text-[#7c3aed] uppercase tracking-wider mb-3">
+                            Dependant {i + 1}
+                          </p>
                           <Field label="Name" value={dep.fullname} />
                           <Field label="Relation" value={dep.relation} />
                           <Field label="Age" value={String(dep.age || "—")} />
@@ -387,20 +450,30 @@ const StaffShowPage = () => {
                     </div>
                   ) : (
                     <div className="py-10 text-center">
-                      <p className="text-[12px] font-[800] text-[#cbd5e1] uppercase">No dependants listed</p>
+                      <p className="text-[12px] font-[800] text-[#cbd5e1] uppercase">
+                        No dependants listed
+                      </p>
                     </div>
                   )}
                 </SectionCard>
 
                 {/* Emergency Contacts */}
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                  <SectionCard icon={Phone} title="Primary Emergency Contact" colorClass="bg-[#fafbff] text-[#3b82f6]">
+                  <SectionCard
+                    icon={Phone}
+                    title="Primary Emergency Contact"
+                    colorClass="bg-[#fafbff] text-[#3b82f6]"
+                  >
                     <Field label="Name" value={staff.primary_person_name} />
                     <Field label="Email" value={staff.primary_person_email} />
                     <Field label="Phone 1" value={staff.primary_person_phone_1} />
                     <Field label="Phone 2" value={staff.primary_person_phone_2} />
                   </SectionCard>
-                  <SectionCard icon={Phone} title="Secondary Emergency Contact" colorClass="bg-[#fafbff] text-[#7c3aed]">
+                  <SectionCard
+                    icon={Phone}
+                    title="Secondary Emergency Contact"
+                    colorClass="bg-[#fafbff] text-[#7c3aed]"
+                  >
                     <Field label="Name" value={staff.secondary_person_name} />
                     <Field label="Email" value={staff.secondary_person_email} />
                     <Field label="Phone 1" value={staff.secondary_person_phone_1} />
@@ -412,17 +485,41 @@ const StaffShowPage = () => {
 
             {/* TAB 3 — DOCUMENTS */}
             {activeTab === "documents" && (
-              <SectionCard icon={FileText} title="Uploaded Documents" colorClass="bg-[#fafbff] text-[#ea580c]">
+              <SectionCard
+                icon={FileText}
+                title="Uploaded Documents"
+                colorClass="bg-[#fafbff] text-[#ea580c]"
+              >
                 {staff.aadhaar_card || staff.pan_card || staff.bank_proof ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5">
-                    {staff.aadhaar_card && <DocumentItem label="Aadhaar Card" path={staff.aadhaar_card} updatedAt={staff.updated_at} />}
-                    {staff.pan_card && <DocumentItem label="PAN Card" path={staff.pan_card} updatedAt={staff.updated_at} />}
-                    {staff.bank_proof && <DocumentItem label="Bank Proof" path={staff.bank_proof} updatedAt={staff.updated_at} />}
+                    {staff.aadhaar_card && (
+                      <DocumentItem
+                        label="Aadhaar Card"
+                        path={staff.aadhaar_card}
+                        updatedAt={staff.updated_at}
+                      />
+                    )}
+                    {staff.pan_card && (
+                      <DocumentItem
+                        label="PAN Card"
+                        path={staff.pan_card}
+                        updatedAt={staff.updated_at}
+                      />
+                    )}
+                    {staff.bank_proof && (
+                      <DocumentItem
+                        label="Bank Proof"
+                        path={staff.bank_proof}
+                        updatedAt={staff.updated_at}
+                      />
+                    )}
                   </div>
                 ) : (
                   <div className="py-16 text-center">
                     <FileText size={48} className="text-[#e2e8f0] mx-auto mb-4" strokeWidth={1.5} />
-                    <p className="text-[12px] font-[800] text-[#cbd5e1] uppercase">No documents attached</p>
+                    <p className="text-[12px] font-[800] text-[#cbd5e1] uppercase">
+                      No documents attached
+                    </p>
                   </div>
                 )}
               </SectionCard>
@@ -430,7 +527,11 @@ const StaffShowPage = () => {
 
             {/* TAB 4 — BEACON ASSIGNED */}
             {activeTab === "beacon" && (
-              <SectionCard icon={Cpu} title="Beacon Hardware Binding" colorClass="bg-[#fafbff] text-[#10b981]">
+              <SectionCard
+                icon={Cpu}
+                title="Beacon Hardware Binding"
+                colorClass="bg-[#fafbff] text-[#10b981]"
+              >
                 {staff.beacon_id ? (
                   <div className="max-w-md mx-auto p-6 bg-white rounded-2xl border border-[#e2e8f0] shadow-sm flex flex-col items-center text-center">
                     <div className="w-16 h-16 bg-[#ecfdf5] text-[#10b981] rounded-full flex items-center justify-center mb-4 relative">
@@ -440,16 +541,26 @@ const StaffShowPage = () => {
                         <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#10b981]"></span>
                       </span>
                     </div>
-                    <h4 className="text-[16px] font-[900] text-[#1e293b] mb-1 uppercase tracking-tight">Active Beacon Linked</h4>
-                    <p className="text-[12px] text-[#64748b] mb-6">This staff member is currently assigned to a physical tracking device.</p>
-                    
+                    <h4 className="text-[16px] font-[900] text-[#1e293b] mb-1 uppercase tracking-tight">
+                      Active Beacon Linked
+                    </h4>
+                    <p className="text-[12px] text-[#64748b] mb-6">
+                      This staff member is currently assigned to a physical tracking device.
+                    </p>
+
                     <div className="w-full bg-[#fafbff] rounded-xl border border-[#f1f5f9] p-4 text-left space-y-3">
                       <div>
-                        <span className="text-[9px] font-[900] text-[#94a3b8] uppercase tracking-wider block mb-0.5">Device ID / Serial</span>
-                        <span className="text-[13.5px] font-[800] text-[#1e293b]">{staff.beacon_id}</span>
+                        <span className="text-[9px] font-[900] text-[#94a3b8] uppercase tracking-wider block mb-0.5">
+                          Device ID / Serial
+                        </span>
+                        <span className="text-[13.5px] font-[800] text-[#1e293b]">
+                          {staff.beacon_id}
+                        </span>
                       </div>
                       <div>
-                        <span className="text-[9px] font-[900] text-[#94a3b8] uppercase tracking-wider block mb-0.5">Hardware Status</span>
+                        <span className="text-[9px] font-[900] text-[#94a3b8] uppercase tracking-wider block mb-0.5">
+                          Hardware Status
+                        </span>
                         <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-[800] bg-[#ecfdf5] text-[#059669] border border-[#d1fae5] uppercase tracking-wide">
                           ONLINE & TRANSMITTING
                         </span>
@@ -461,8 +572,12 @@ const StaffShowPage = () => {
                     <div className="w-16 h-16 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mx-auto mb-4">
                       <Cpu size={32} />
                     </div>
-                    <h3 className="text-[15px] font-[900] text-[#1e293b] mb-1">No Beacon Assigned</h3>
-                    <p className="text-[12.5px] text-[#94a3b8] mb-6">This staff member does not have any physical beacon linked to them yet.</p>
+                    <h3 className="text-[15px] font-[900] text-[#1e293b] mb-1">
+                      No Beacon Assigned
+                    </h3>
+                    <p className="text-[12.5px] text-[#94a3b8] mb-6">
+                      This staff member does not have any physical beacon linked to them yet.
+                    </p>
                     <button
                       onClick={() => navigate(`/staff/edit/${id}`)}
                       className="btn btn-primary justify-center w-full"
@@ -473,15 +588,14 @@ const StaffShowPage = () => {
                 )}
               </SectionCard>
             )}
-
           </motion.div>
         </AnimatePresence>
       </div>
 
       <AnimatePresence>
         {showExport && staff && (
-          <ExportOverlay 
-            onClose={() => setShowExport(false)} 
+          <ExportOverlay
+            onClose={() => setShowExport(false)}
             buildPdf={buildIndividualPdf(staff)}
             title={`Export Employee Profile`}
             defaultTitle={`${staff.first_name} ${staff.last_name}`}

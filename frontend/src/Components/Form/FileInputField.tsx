@@ -21,10 +21,9 @@ const FileInputField: React.FC<FileInputFieldProps> = ({
   errors,
   required = false,
   accept = "image/*, .pdf, .doc, .docx",
-  helperText
+  helperText,
 }) => {
   const [fileName, setFileName] = useState<string | null>(null);
-
 
   // Extract the original ref and onChange from register
   const { onChange, ref, ...rest } = register(name, {
@@ -49,11 +48,11 @@ const FileInputField: React.FC<FileInputFieldProps> = ({
   const handleRemove = (e: React.MouseEvent) => {
     e.preventDefault();
     setFileName(null);
-    // We need to clear the input value. 
+    // We need to clear the input value.
     // Since we don't have direct access to the DOM element via state,
     // we can rely on the form reset or just visual clearing here.
-    // Ideally, you'd use setValue from useForm context if passed, 
-    // but for a dumb component, visual clearing is often enough 
+    // Ideally, you'd use setValue from useForm context if passed,
+    // but for a dumb component, visual clearing is often enough
     // until the form is submitted.
     const input = document.getElementById(name) as HTMLInputElement;
     if (input) input.value = "";
@@ -78,9 +77,7 @@ const FileInputField: React.FC<FileInputFieldProps> = ({
         )}
       </label>
 
-      <div
-        className={`relative group w-full transition-all duration-200 ease-in-out`}
-      >
+      <div className={`relative group w-full transition-all duration-200 ease-in-out`}>
         {/* The Actual Input (Hidden but Functional) */}
         <input
           id={name}
@@ -95,11 +92,12 @@ const FileInputField: React.FC<FileInputFieldProps> = ({
         {/* The Visual UI */}
         <div
           className={`flex flex-col items-center justify-center w-full px-4 py-1 border border-dashed border-black rounded-xl transition-colors
-            ${hasError
-              ? "border-red-300 bg-red-50"
-              : fileName
-                ? "border-black bg-blue-50"
-                : "border-gray-300 bg-white hover:bg-white hover:border-purple-400"
+            ${
+              hasError
+                ? "border-red-300 bg-red-50"
+                : fileName
+                  ? "border-black bg-blue-50"
+                  : "border-gray-300 bg-white hover:bg-white hover:border-purple-400"
             }
           `}
         >
@@ -132,10 +130,7 @@ const FileInputField: React.FC<FileInputFieldProps> = ({
           ) : (
             // State: Empty / Prompt
             <div className="flex flex-col items-center text-center">
-              <FaCloudUploadAlt
-                size={20}
-                className="text-blue-700"
-              />
+              <FaCloudUploadAlt size={20} className="text-blue-700" />
               <p className="text-xs font-bold text-slate-600 uppercase">
                 <span className="text-blue-800 text-[10px]">Click to upload</span>
               </p>

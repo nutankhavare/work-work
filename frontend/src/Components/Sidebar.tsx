@@ -7,26 +7,26 @@ import { useConfirm } from "../Context/ConfirmContext";
 import { motion, AnimatePresence } from "framer-motion";
 
 // Lucide Icons as per Design Spec
-import { 
-  LayoutDashboard, 
-  ShieldCheck, 
+import {
+  LayoutDashboard,
+  ShieldCheck,
   // ShieldAlert,
-  UserCog, 
-  Bus, 
-  Users, 
-  CircuitBoard, 
-  // UsersRound, 
-  // Briefcase, 
-  // BookOpen, 
-  Truck, 
-  MessageSquare, 
-  // FileText, 
-  Settings, 
+  UserCog,
+  Bus,
+  Users,
+  CircuitBoard,
+  // UsersRound,
+  // Briefcase,
+  // BookOpen,
+  Truck,
+  MessageSquare,
+  // FileText,
+  Settings,
   LogOut,
   // ChevronRight,
   Megaphone,
   Headset,
-  BarChart2
+  BarChart2,
 } from "lucide-react";
 
 import type { SidebarLinkType } from "../Types/Index";
@@ -89,17 +89,17 @@ const sidebarLinks: SidebarLinkType[] = [
     icon: <CircuitBoard size={18} />,
     feature: "MANAGE DEVICES",
   },
-  { 
-    name: "Feedbacks", 
-    path: "/feedbacks", 
-    icon: <MessageSquare size={18} />, 
-    feature: "MANAGE FEEDBACKS", 
+  {
+    name: "Feedbacks",
+    path: "/feedbacks",
+    icon: <MessageSquare size={18} />,
+    feature: "MANAGE FEEDBACKS",
   },
-  { 
-    name: "Reports", 
-    path: "/reports", 
-    icon: <BarChart2 size={18} />, 
-    feature: "VIEW REPORTS", 
+  {
+    name: "Reports",
+    path: "/reports",
+    icon: <BarChart2 size={18} />,
+    feature: "VIEW REPORTS",
   },
   {
     name: "Compliance",
@@ -120,17 +120,17 @@ const sidebarLinks: SidebarLinkType[] = [
     icon: <Megaphone size={18} />,
     feature: "MANAGE ADS",
   },
-  { 
-    name: "Settings", 
-    path: "/settings", 
-    icon: <Settings size={18} />, 
-    feature: "MANAGE SETTINGS", 
+  {
+    name: "Settings",
+    path: "/settings",
+    icon: <Settings size={18} />,
+    feature: "MANAGE SETTINGS",
   },
-  { 
-    name: "Customer Care", 
-    path: "/customer-care", 
-    icon: <Headset size={18} />, 
-    feature: "MANAGE CUSTOMER CARE", 
+  {
+    name: "Customer Care",
+    path: "/customer-care",
+    icon: <Headset size={18} />,
+    feature: "MANAGE CUSTOMER CARE",
   },
 ];
 
@@ -145,7 +145,9 @@ const Sidebar = ({ isOpen, closeSidebar }: Props) => {
   const { user } = useAuth();
   const confirm = useConfirm();
   const navigate = useNavigate();
-  const isAdmin = roles.some((role: any) => ["admin", "super admin", "org_admin", "org admin"].includes(role?.toLowerCase?.()));
+  const isAdmin = roles.some((role: any) =>
+    ["admin", "super admin", "org_admin", "org admin"].includes(role?.toLowerCase?.()),
+  );
 
   const accessibleLinks = sidebarLinks
     .filter((link) => app_features.includes(link.feature))
@@ -184,7 +186,10 @@ const Sidebar = ({ isOpen, closeSidebar }: Props) => {
       >
         {/* Sidebar Brand Section */}
         <div className="sidebar-brand">
-          <div className="sidebar-brand-inner" style={{ justifyContent: "space-between", width: "100%" }}>
+          <div
+            className="sidebar-brand-inner"
+            style={{ justifyContent: "space-between", width: "100%" }}
+          >
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <div className="brand-icon">
                 <Truck size={18} color="white" />
@@ -203,18 +208,23 @@ const Sidebar = ({ isOpen, closeSidebar }: Props) => {
         <nav className="sidebar-nav">
           {accessibleLinks.map((link) => {
             const isActive = link.path && location.pathname.startsWith(link.path);
-            
+
             return (
               <Link
                 key={link.name}
                 to={link.path!}
                 onClick={closeSidebar}
-                className={`nav-item ${isActive ? 'active' : ''}`}
+                className={`nav-item ${isActive ? "active" : ""}`}
               >
-                <span className="nav-icon">
-                  {link.icon}
-                </span>
-                <span style={{ flex: "1 1 0%", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <span className="nav-icon">{link.icon}</span>
+                <span
+                  style={{
+                    flex: "1 1 0%",
+                    overflow: "hidden",
+                    textOverflow: "ellipsis",
+                    whiteSpace: "nowrap",
+                  }}
+                >
                   {link.name}
                 </span>
               </Link>
@@ -225,12 +235,11 @@ const Sidebar = ({ isOpen, closeSidebar }: Props) => {
         {/* Sidebar Footer: User & Logout */}
         <div className="sidebar-user">
           <div className="sidebar-user-divider"></div>
-          <button 
-            className="user-row" 
-            title="Logout"
-            onClick={handleLogout}
-          >
-            <div className="avi" style={{ background: "var(--primary-light)", color: "var(--primary)" }}>
+          <button className="user-row" title="Logout" onClick={handleLogout}>
+            <div
+              className="avi"
+              style={{ background: "var(--primary-light)", color: "var(--primary)" }}
+            >
               {user?.email?.substring(0, 2).toUpperCase() || "AU"}
             </div>
             <div style={{ flex: "1 1 0%", minWidth: "0px", textAlign: "left" }}>

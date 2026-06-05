@@ -8,7 +8,16 @@ type InputFieldProps = {
   register: UseFormRegister<any>;
   errors: FieldErrors;
   required?: boolean | string;
-  type?: "text" | "email" | "number" | "password" | "tel" | "date" | "file" | 'time' | 'datetime-local';
+  type?:
+    | "text"
+    | "email"
+    | "number"
+    | "password"
+    | "tel"
+    | "date"
+    | "file"
+    | "time"
+    | "datetime-local";
   className?: string;
   placeholder?: string;
   disabled?: boolean;
@@ -27,7 +36,7 @@ const InputField: React.FC<InputFieldProps> = ({
   type = "text",
   className = "",
   disabled = false,
-  step=1,
+  step = 1,
   pattern,
   maxLength,
   minLength,
@@ -44,44 +53,42 @@ const InputField: React.FC<InputFieldProps> = ({
 
   if (pattern) validationRules.pattern = pattern;
   if (maxLength) {
-    validationRules.maxLength = typeof maxLength === 'number' 
-      ? { value: maxLength, message: `Maximum length is ${maxLength}` } 
-      : maxLength;
+    validationRules.maxLength =
+      typeof maxLength === "number"
+        ? { value: maxLength, message: `Maximum length is ${maxLength}` }
+        : maxLength;
   }
   if (minLength) {
-    validationRules.minLength = typeof minLength === 'number' 
-      ? { value: minLength, message: `Minimum length is ${minLength}` } 
-      : minLength;
+    validationRules.minLength =
+      typeof minLength === "number"
+        ? { value: minLength, message: `Minimum length is ${minLength}` }
+        : minLength;
   }
 
   // Safely access the specific error message for this field (supports nested like dependants.0.phone)
   const getNestedError = (obj: any, path: string) => {
-    return path.split('.').reduce((acc, part) => acc && acc[part], obj);
+    return path.split(".").reduce((acc, part) => acc && acc[part], obj);
   };
   const errorMessage = getNestedError(errors, name)?.message;
 
   return (
     <div>
-      <label
-        htmlFor={name}
-        className="block text-sm text-purple-950 uppercase font-bold mb-2"
-      >
-        {label}{required && <span className="text-red-500">*</span>}
+      <label htmlFor={name} className="block text-sm text-purple-950 uppercase font-bold mb-2">
+        {label}
+        {required && <span className="text-red-500">*</span>}
       </label>
       <input
         id={name}
         type={type}
         step={step}
         disabled={disabled}
-        maxLength={typeof maxLength === 'number' ? maxLength : maxLength?.value}
-        minLength={typeof minLength === 'number' ? minLength : minLength?.value}
+        maxLength={typeof maxLength === "number" ? maxLength : maxLength?.value}
+        minLength={typeof minLength === "number" ? minLength : minLength?.value}
         {...register(name, validationRules)}
         className={`w-full px-4 py-2 bg-white border border-gray-300 rounded-lg focus:outline-none focus:ring focus:ring-purple-800 ${className}`}
         {...props} // Spread other props like placeholder
       />
-      {errorMessage && (
-        <p className="text-red-500 text-sm mt-1">{String(errorMessage)}</p>
-      )}
+      {errorMessage && <p className="text-red-500 text-sm mt-1">{String(errorMessage)}</p>}
     </div>
   );
 };

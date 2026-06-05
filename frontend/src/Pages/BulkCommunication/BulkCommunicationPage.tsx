@@ -14,20 +14,14 @@ import {
   Paperclip,
   Trash2,
   X,
-  Search
+  Search,
 } from "lucide-react";
 import { Badge, Button, Input, Select } from "../../Components/UI/index";
 import PageHeader from "../../Components/UI/PageHeader";
 import tenantApi from "../../Services/ApiService";
 import { useAlert } from "../../Context/AlertContext";
 
-const Label = ({
-  children,
-  required,
-}: {
-  children: React.ReactNode;
-  required?: boolean;
-}) => (
+const Label = ({ children, required }: { children: React.ReactNode; required?: boolean }) => (
   <label
     style={{
       display: "block",
@@ -78,7 +72,7 @@ export const BulkCommunicationPage = () => {
   const [channel, setChannel] = useState("email");
   const [subject, setSubject] = useState("");
   const [message, setMessage] = useState("");
-  
+
   // Attachments State (ABS Uploads)
   const [attachmentUrl, setAttachmentUrl] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
@@ -90,8 +84,12 @@ export const BulkCommunicationPage = () => {
 
   // Recipient Search State
   const [searchQuery, setSearchQuery] = useState("");
-  const [allRecipients, setAllRecipients] = useState<{ id: number; type: "staff" | "drivers"; name: string; email: string }[]>([]);
-  const [selectedRecipients, setSelectedRecipients] = useState<{ id: number; type: "staff" | "drivers"; name: string }[]>([]);
+  const [allRecipients, setAllRecipients] = useState<
+    { id: number; type: "staff" | "drivers"; name: string; email: string }[]
+  >([]);
+  const [selectedRecipients, setSelectedRecipients] = useState<
+    { id: number; type: "staff" | "drivers"; name: string }[]
+  >([]);
   const [isFetchingRecipients, setIsFetchingRecipients] = useState(false);
 
   // Analytics & Logs State
@@ -122,7 +120,14 @@ export const BulkCommunicationPage = () => {
         const mapped: BroadcastItem[] = rows.map((b: any) => ({
           id: b.id,
           title: b.subject,
-          audience: b.target_audience === "everyone" ? "Everyone" : b.target_audience === "staff" ? "All Staff" : b.target_audience === "drivers" ? "All Drivers" : "Individual",
+          audience:
+            b.target_audience === "everyone"
+              ? "Everyone"
+              : b.target_audience === "staff"
+                ? "All Staff"
+                : b.target_audience === "drivers"
+                  ? "All Drivers"
+                  : "Individual",
           channel: b.channel === "email" ? "Email" : b.channel === "sms" ? "SMS" : "Push",
           date: new Date(b.created_at).toLocaleString("en-IN", {
             month: "short",
@@ -248,7 +253,13 @@ export const BulkCommunicationPage = () => {
         channel,
         subject: channel === "email" ? subject : `Broadcast to ${audience}`,
         body: finalBody,
-        recipient_ids: audience === "individual" ? selectedRecipients.map((r) => ({ id: r.id, type: r.type === "drivers" ? "drivers" : "staff" })) : undefined,
+        recipient_ids:
+          audience === "individual"
+            ? selectedRecipients.map((r) => ({
+                id: r.id,
+                type: r.type === "drivers" ? "drivers" : "staff",
+              }))
+            : undefined,
       });
 
       setIsSent(true);
@@ -394,7 +405,10 @@ export const BulkCommunicationPage = () => {
                       <div>
                         <Label required>Select Recipients</Label>
                         <div className="relative group">
-                          <Search className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400" size={16} />
+                          <Search
+                            className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400"
+                            size={16}
+                          />
                           <Input
                             placeholder="Search staff or drivers..."
                             value={searchQuery}
@@ -407,37 +421,56 @@ export const BulkCommunicationPage = () => {
                       <div className="max-h-[180px] overflow-y-auto border border-[var(--border)] rounded-xl bg-white p-2 grid grid-cols-1 md:grid-cols-2 gap-2">
                         {isFetchingRecipients ? (
                           <div className="col-span-full py-4 text-center">
-                            <Loader2 className="animate-spin text-[var(--primary)] mx-auto" size={24} />
+                            <Loader2
+                              className="animate-spin text-[var(--primary)] mx-auto"
+                              size={24}
+                            />
                           </div>
                         ) : (
                           allRecipients
                             .filter((r) => r.name.toLowerCase().includes(searchQuery.toLowerCase()))
                             .map((rec) => {
-                              const isSelected = selectedRecipients.some((s) => s.id === rec.id && s.type === rec.type);
+                              const isSelected = selectedRecipients.some(
+                                (s) => s.id === rec.id && s.type === rec.type,
+                              );
                               return (
                                 <button
                                   key={`${rec.type}-${rec.id}`}
                                   onClick={() => {
                                     if (isSelected) {
-                                      setSelectedRecipients((prev) => prev.filter((s) => !(s.id === rec.id && s.type === rec.type)));
+                                      setSelectedRecipients((prev) =>
+                                        prev.filter(
+                                          (s) => !(s.id === rec.id && s.type === rec.type),
+                                        ),
+                                      );
                                     } else {
                                       setSelectedRecipients((prev) => [...prev, rec]);
                                     }
                                   }}
                                   className={`flex items-center gap-3 p-3 rounded-xl border text-left transition-all ${
-                                    isSelected ? "bg-[#f5f3ff] border-[#7c3aed]" : "bg-white border-[#f1f5f9] hover:bg-[#fafbff]"
+                                    isSelected
+                                      ? "bg-[#f5f3ff] border-[#7c3aed]"
+                                      : "bg-white border-[#f1f5f9] hover:bg-[#fafbff]"
                                   }`}
                                 >
                                   <div
                                     className={`w-4 h-4 rounded border flex items-center justify-center transition-all ${
-                                      isSelected ? "bg-[#7c3aed] border-[#7c3aed]" : "border-[#cbd5e1]"
+                                      isSelected
+                                        ? "bg-[#7c3aed] border-[#7c3aed]"
+                                        : "border-[#cbd5e1]"
                                     }`}
                                   >
-                                    {isSelected && <div className="w-1.5 h-1.5 bg-white rounded-full" />}
+                                    {isSelected && (
+                                      <div className="w-1.5 h-1.5 bg-white rounded-full" />
+                                    )}
                                   </div>
                                   <div className="min-w-0">
-                                    <p className="text-[12px] font-[800] text-[#1e293b] truncate">{rec.name}</p>
-                                    <p className="text-[10px] font-[700] text-[#94a3b8] uppercase">{rec.type}</p>
+                                    <p className="text-[12px] font-[800] text-[#1e293b] truncate">
+                                      {rec.name}
+                                    </p>
+                                    <p className="text-[10px] font-[700] text-[#94a3b8] uppercase">
+                                      {rec.type}
+                                    </p>
                                   </div>
                                 </button>
                               );
@@ -456,7 +489,11 @@ export const BulkCommunicationPage = () => {
                               <X
                                 size={12}
                                 className="cursor-pointer hover:text-red-500"
-                                onClick={() => setSelectedRecipients((prev) => prev.filter((p) => !(p.id === s.id && p.type === s.type)))}
+                                onClick={() =>
+                                  setSelectedRecipients((prev) =>
+                                    prev.filter((p) => !(p.id === s.id && p.type === s.type)),
+                                  )
+                                }
                               />
                             </span>
                           ))}
@@ -522,8 +559,12 @@ export const BulkCommunicationPage = () => {
                         className="w-16 h-16 rounded-lg object-cover border border-[#e2e8f0] flex-shrink-0"
                       />
                       <div className="min-w-0">
-                        <p className="text-xs font-bold text-slate-700 truncate">Uploaded Attachment</p>
-                        <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">Azure Blob Storage Link</p>
+                        <p className="text-xs font-bold text-slate-700 truncate">
+                          Uploaded Attachment
+                        </p>
+                        <p className="text-[10px] text-emerald-600 font-bold uppercase tracking-wider">
+                          Azure Blob Storage Link
+                        </p>
                       </div>
                     </div>
                     <Button
@@ -557,7 +598,11 @@ export const BulkCommunicationPage = () => {
                       disabled={isUploading}
                       className="flex-1 sm:flex-none justify-center gap-2"
                     >
-                      {isUploading ? <Loader2 size={16} className="animate-spin" /> : <Paperclip size={16} />}
+                      {isUploading ? (
+                        <Loader2 size={16} className="animate-spin" />
+                      ) : (
+                        <Paperclip size={16} />
+                      )}
                       {isUploading ? "Uploading..." : "Attach File"}
                     </Button>
                     <Button
@@ -741,9 +786,7 @@ export const BulkCommunicationPage = () => {
                 >
                   <Clock size={16} color="var(--warning)" /> Scheduled
                 </h3>
-                <Badge variant="amber">
-                  {scheduledMessages.length} PENDING
-                </Badge>
+                <Badge variant="amber">{scheduledMessages.length} PENDING</Badge>
               </div>
               <div className="flex flex-col gap-3">
                 {scheduledMessages.length === 0 ? (
@@ -780,10 +823,7 @@ export const BulkCommunicationPage = () => {
                         </span>
                       </div>
                       <div className="flex justify-end gap-2 mt-4 pt-3 border-t border-[var(--border)]">
-                        <button
-                          className="act-btn act-delete"
-                          onClick={() => setDeleteItem(s)}
-                        >
+                        <button className="act-btn act-delete" onClick={() => setDeleteItem(s)}>
                           <Trash2 size={14} />
                         </button>
                       </div>
@@ -833,7 +873,8 @@ export const BulkCommunicationPage = () => {
                       className="flex flex-col gap-4 relative"
                       style={{
                         paddingBottom: idx !== recentBroadcasts.length - 1 ? "20px" : "0",
-                        borderBottom: idx !== recentBroadcasts.length - 1 ? "1px solid var(--border)" : "none",
+                        borderBottom:
+                          idx !== recentBroadcasts.length - 1 ? "1px solid var(--border)" : "none",
                       }}
                     >
                       <div className="flex flex-row gap-4 items-start">
@@ -891,9 +932,7 @@ export const BulkCommunicationPage = () => {
                             {r.audience} • {r.date}
                           </div>
                           <div className="flex flex-row items-center gap-3">
-                            <Badge variant="green">
-                              {r.status}
-                            </Badge>
+                            <Badge variant="green">{r.status}</Badge>
                             <span className="flex items-center gap-1 text-[11px] font-black text-[var(--success)]">
                               <Eye size={12} /> {r.opens}
                             </span>
@@ -1046,16 +1085,47 @@ export const BulkCommunicationPage = () => {
               <div style={{ padding: "24px" }}>
                 <div className="grid grid-cols-2 gap-4 mb-6">
                   <div style={{ background: "#F8FAFC", borderRadius: 12, padding: "16px" }}>
-                    <div style={{ fontSize: 11, fontWeight: 800, color: "var(--muted)", marginBottom: 4 }}>AUDIENCE</div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)" }}>{viewItem.audience}</div>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 800,
+                        color: "var(--muted)",
+                        marginBottom: 4,
+                      }}
+                    >
+                      AUDIENCE
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)" }}>
+                      {viewItem.audience}
+                    </div>
                   </div>
                   <div style={{ background: "#F8FAFC", borderRadius: 12, padding: "16px" }}>
-                    <div style={{ fontSize: 11, fontWeight: 800, color: "var(--muted)", marginBottom: 4 }}>SENT DATE</div>
-                    <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)" }}>{viewItem.date}</div>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 800,
+                        color: "var(--muted)",
+                        marginBottom: 4,
+                      }}
+                    >
+                      SENT DATE
+                    </div>
+                    <div style={{ fontSize: 14, fontWeight: 800, color: "var(--text)" }}>
+                      {viewItem.date}
+                    </div>
                   </div>
                 </div>
 
-                <div style={{ fontSize: 11, fontWeight: 900, color: "var(--primary)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 900,
+                    color: "var(--primary)",
+                    textTransform: "uppercase",
+                    letterSpacing: ".05em",
+                    marginBottom: 8,
+                  }}
+                >
                   Message Content
                 </div>
                 <div
@@ -1069,23 +1139,54 @@ export const BulkCommunicationPage = () => {
                     lineHeight: 1.6,
                     maxHeight: 200,
                     overflowY: "auto",
-                    marginBottom: 20
+                    marginBottom: 20,
                   }}
                   dangerouslySetInnerHTML={{ __html: viewItem.body || "" }}
                 />
 
-                <div style={{ fontSize: 11, fontWeight: 900, color: "var(--primary)", textTransform: "uppercase", letterSpacing: ".05em", marginBottom: 8 }}>
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 900,
+                    color: "var(--primary)",
+                    textTransform: "uppercase",
+                    letterSpacing: ".05em",
+                    marginBottom: 8,
+                  }}
+                >
                   Performance
                 </div>
                 <div className="flex gap-4 p-4 rounded-xl border border-[var(--border)] bg-[var(--surface-hover)]">
                   <div className="flex-1">
-                    <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 4 }}>STATUS</div>
-                    <Badge variant={viewItem.status === "Pending" ? "amber" : "green"}>{viewItem.status}</Badge>
+                    <div
+                      style={{
+                        fontSize: 11,
+                        fontWeight: 700,
+                        color: "var(--muted)",
+                        marginBottom: 4,
+                      }}
+                    >
+                      STATUS
+                    </div>
+                    <Badge variant={viewItem.status === "Pending" ? "amber" : "green"}>
+                      {viewItem.status}
+                    </Badge>
                   </div>
                   {viewItem.opens && (
                     <div className="flex-1 border-l pl-4 border-[var(--border)]">
-                      <div style={{ fontSize: 11, fontWeight: 700, color: "var(--muted)", marginBottom: 4 }}>ENGAGEMENT</div>
-                      <div style={{ fontSize: 14, fontWeight: 900, color: "var(--success)" }}>{viewItem.opens}</div>
+                      <div
+                        style={{
+                          fontSize: 11,
+                          fontWeight: 700,
+                          color: "var(--muted)",
+                          marginBottom: 4,
+                        }}
+                      >
+                        ENGAGEMENT
+                      </div>
+                      <div style={{ fontSize: 14, fontWeight: 900, color: "var(--success)" }}>
+                        {viewItem.opens}
+                      </div>
                     </div>
                   )}
                 </div>
@@ -1142,7 +1243,10 @@ export const BulkCommunicationPage = () => {
                   margin: "0 auto 20px",
                 }}
               >
-                <span className="material-symbols-outlined" style={{ fontSize: 36, color: "#DC2626" }}>
+                <span
+                  className="material-symbols-outlined"
+                  style={{ fontSize: 36, color: "#DC2626" }}
+                >
                   delete_forever
                 </span>
               </div>
@@ -1152,11 +1256,18 @@ export const BulkCommunicationPage = () => {
               <div style={{ fontSize: 13, color: "#64748B", marginBottom: 16, lineHeight: 1.6 }}>
                 You are about to permanently remove this delivery log from history.
               </div>
-              <div style={{ fontSize: 15, fontWeight: 800, color: "var(--text)", marginBottom: 24 }} className="truncate">
+              <div
+                style={{ fontSize: 15, fontWeight: 800, color: "var(--text)", marginBottom: 24 }}
+                className="truncate"
+              >
                 {deleteItem.title}
               </div>
               <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
-                <Button variant="outline" onClick={() => setDeleteItem(null)} style={{ minWidth: 100 }}>
+                <Button
+                  variant="outline"
+                  onClick={() => setDeleteItem(null)}
+                  style={{ minWidth: 100 }}
+                >
                   Cancel
                 </Button>
                 <Button onClick={handleDelete} style={{ minWidth: 100, background: "#DC2626" }}>

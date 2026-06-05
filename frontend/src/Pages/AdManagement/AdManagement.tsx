@@ -3,7 +3,7 @@ import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "../../Components/UI";
 import tenantApi from "../../Services/ApiService";
-import { Megaphone, Search, Plus, Trash2, Eye, X } from "lucide-react";
+import { Megaphone, Plus, Trash2, Eye, X } from "lucide-react";
 import PageHeader from "../../Components/UI/PageHeader";
 
 export interface AdItem {
@@ -58,10 +58,10 @@ export function AdManagement() {
 
   return (
     <div className="min-h-screen bg-[#F8FAFC] pb-12 font-[var(--font-manrope)]">
-      <PageHeader 
-        title="Ad Management" 
-        icon={<Megaphone size={18} />} 
-        breadcrumb="Admin / Ad Management" 
+      <PageHeader
+        title="Ad Management"
+        icon={<Megaphone size={18} />}
+        breadcrumb="Admin / Ad Management"
       />
 
       <div className="px-6">
@@ -104,9 +104,7 @@ export function AdManagement() {
                 alignItems: "center",
               }}
             >
-              <span style={{ fontSize: 13, fontWeight: 700, color: "#DC2626" }}>
-                ⚠ {errorMsg}
-              </span>
+              <span style={{ fontSize: 13, fontWeight: 700, color: "#DC2626" }}>⚠ {errorMsg}</span>
               <button
                 onClick={() => setErrorMsg("")}
                 style={{
@@ -124,9 +122,7 @@ export function AdManagement() {
         </AnimatePresence>
 
         {loading ? (
-          <div
-            style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}
-          >
+          <div style={{ padding: 40, textAlign: "center", color: "var(--muted)" }}>
             Loading ads...
           </div>
         ) : ads.length === 0 ? (
@@ -139,10 +135,7 @@ export function AdManagement() {
               border: "1px solid var(--border)",
             }}
           >
-            <Megaphone
-              size={48}
-              className="text-slate-300 mx-auto mb-4"
-            />
+            <Megaphone size={48} className="text-slate-300 mx-auto mb-4" />
             <div
               style={{
                 fontSize: 16,
@@ -153,9 +146,7 @@ export function AdManagement() {
             >
               No Ads Uploaded
             </div>
-            <div
-              style={{ fontSize: 13, color: "var(--muted)", marginBottom: 20 }}
-            >
+            <div style={{ fontSize: 13, color: "var(--muted)", marginBottom: 20 }}>
               Upload your first advertisement image to display it across the network.
             </div>
             <Button variant="default" onClick={() => navigate("/ads/create")}>
@@ -261,9 +252,7 @@ export function AdManagement() {
                         marginTop: 16,
                       }}
                     >
-                      <div
-                        className="flex gap-2 w-full justify-end"
-                      >
+                      <div className="flex gap-2 w-full justify-end">
                         <button
                           className="p-2 bg-[#F1F5F9] text-[#64748B] hover:text-[#7C3AED] hover:bg-[#EDE9FE] rounded-lg transition-all"
                           title="View Full Ad"
@@ -289,12 +278,7 @@ export function AdManagement() {
       </div>
 
       <AnimatePresence>
-        {viewAd && (
-          <ViewOverlay
-            ad={viewAd}
-            onClose={() => setViewAd(null)}
-          />
-        )}
+        {viewAd && <ViewOverlay ad={viewAd} onClose={() => setViewAd(null)} />}
       </AnimatePresence>
 
       <AnimatePresence>
@@ -310,13 +294,7 @@ export function AdManagement() {
   );
 }
 
-const ViewOverlay = ({
-  ad,
-  onClose,
-}: {
-  ad: AdItem;
-  onClose: () => void;
-}) => {
+const ViewOverlay = ({ ad, onClose }: { ad: AdItem; onClose: () => void }) => {
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -444,10 +422,7 @@ const DeleteOverlay = ({
           margin: "0 auto 20px",
         }}
       >
-        <span
-          className="material-symbols-outlined"
-          style={{ fontSize: 36, color: "#DC2626" }}
-        >
+        <span className="material-symbols-outlined" style={{ fontSize: 36, color: "#DC2626" }}>
           delete_forever
         </span>
       </div>
@@ -482,11 +457,7 @@ const DeleteOverlay = ({
         {ad.title}
       </div>
       <div style={{ display: "flex", gap: 12, justifyContent: "center" }}>
-        <Button
-          variant="secondary"
-          onClick={onCancel}
-          className="flex-1 justify-center"
-        >
+        <Button variant="secondary" onClick={onCancel} className="flex-1 justify-center">
           Cancel
         </Button>
         <Button

@@ -1,7 +1,7 @@
 // Driver.types.ts
 export interface Driver {
   id: string | number;
-  
+
   // Basic Information
   first_name: string;
   last_name: string;
@@ -12,7 +12,7 @@ export interface Driver {
   blood_group?: string;
   marital_status?: string;
   number_of_dependents: number;
-  profile_photo?: string
+  profile_photo?: string;
 
   // Emergency Contacts
   primary_person_name?: string;
@@ -45,10 +45,10 @@ export interface Driver {
   police_verification_date?: string;
 
   // bank details
-  bank_name?:string;
-  account_holder_name?:string;
-  account_number?:string;
-  ifsc_code?:string;
+  bank_name?: string;
+  account_holder_name?: string;
+  account_number?: string;
+  ifsc_code?: string;
 
   // License/Insurance Array
   license_insurance?: LicenseInsurance[];

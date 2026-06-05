@@ -1,7 +1,7 @@
 import CreatePage from "./CreatePage";
 
 const EditPage = () => {
-    return <CreatePage />;
+  return <CreatePage />;
 };
 
 export default EditPage;

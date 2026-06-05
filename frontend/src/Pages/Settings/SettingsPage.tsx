@@ -77,7 +77,7 @@ const ReadField = ({
         display: "flex",
         alignItems: "center",
         gap: 8,
-        minHeight: "42px"
+        minHeight: "42px",
       }}
     >
       <span
@@ -225,8 +225,7 @@ export const SettingsPage = () => {
   const [saving, setSaving] = useState(false);
   const [toggles, setToggles] = useState([true, false, true, false, true]);
 
-  const tog = (i: number) =>
-    setToggles((t) => t.map((v, idx) => (idx === i ? !v : v)));
+  const tog = (i: number) => setToggles((t) => t.map((v, idx) => (idx === i ? !v : v)));
 
   useEffect(() => {
     const fetchOrg = async () => {
@@ -239,7 +238,7 @@ export const SettingsPage = () => {
             address: data.address || {},
             contact: data.contact || {},
             institute: data.institute || {},
-            documents: data.documents || {}
+            documents: data.documents || {},
           });
         }
       } catch (err) {
@@ -255,7 +254,7 @@ export const SettingsPage = () => {
     setSaving(true);
     try {
       const formData = new FormData();
-      
+
       // Add top level fields
       formData.append("name", org.name || "");
       formData.append("website", org.website || "");
@@ -263,7 +262,7 @@ export const SettingsPage = () => {
       formData.append("email", org.email || "");
       formData.append("gst_number", org.gst_number || "");
       formData.append("pan_number", org.pan_number || "");
-      
+
       // Add nested objects as JSON strings (backend will parse them)
       formData.append("address", JSON.stringify(org.address));
       formData.append("contact", JSON.stringify(org.contact));
@@ -271,8 +270,10 @@ export const SettingsPage = () => {
       formData.append("documents", JSON.stringify(org.documents));
 
       // Handle any files selected in the UI
-      const fileInputs = document.querySelectorAll('input[type="file"]') as NodeListOf<HTMLInputElement>;
-      fileInputs.forEach(input => {
+      const fileInputs = document.querySelectorAll(
+        'input[type="file"]',
+      ) as NodeListOf<HTMLInputElement>;
+      fileInputs.forEach((input) => {
         if (input.files?.[0]) {
           // Use the 'name' attribute we added to the input (pan_card, etc.)
           formData.append(input.name, input.files[0]);
@@ -280,7 +281,7 @@ export const SettingsPage = () => {
       });
 
       const res = await tenantApi.put("/organization/me", formData, {
-        headers: { "Content-Type": "multipart/form-data" }
+        headers: { "Content-Type": "multipart/form-data" },
       });
 
       if (res.data.success) {
@@ -313,18 +314,16 @@ export const SettingsPage = () => {
   return (
     <div className="min-h-screen bg-[#F8FAFC] font-[var(--font-manrope)]">
       {/* ── Page Header ── */}
-      <PageHeader
-        title="General Settings"
-        icon="settings"
-        breadcrumb="Admin / Account Settings"
-      >
+      <PageHeader title="General Settings" icon="settings" breadcrumb="Admin / Account Settings">
         <button
           className="btn btn-primary !py-2.5"
           onClick={handleSave}
           disabled={saving}
           style={{ opacity: saving ? 0.75 : 1 }}
         >
-          <span className="material-symbols-outlined ms" style={{ fontSize: 16 }}>save</span>
+          <span className="material-symbols-outlined ms" style={{ fontSize: 16 }}>
+            save
+          </span>
           {saving ? "Saving…" : "Save Changes"}
         </button>
       </PageHeader>
@@ -356,48 +355,48 @@ export const SettingsPage = () => {
                 <EditField
                   label="Legal Name"
                   value={org?.name || ""}
-                  onChange={(v) => setOrg({...org, name: v})}
+                  onChange={(v) => setOrg({ ...org, name: v })}
                   icon="business"
                   wide
                 />
-                <ReadField
-                  label="Category"
-                  value={org?.type}
-                  icon="category"
-                />
-                <ReadField
-                  label="Registration No."
-                  value={org?.registration_no}
-                  icon="badge"
-                />
+                <ReadField label="Category" value={org?.type} icon="category" />
+                <ReadField label="Registration No." value={org?.registration_no} icon="badge" />
                 <EditField
                   label="GST Number"
                   value={org?.gst_number || ""}
-                  onChange={(v) => setOrg({...org, gst_number: v})}
+                  onChange={(v) => setOrg({ ...org, gst_number: v })}
                   icon="payments"
                 />
                 <EditField
                   label="PAN Number"
                   value={org?.pan_number || ""}
-                  onChange={(v) => setOrg({...org, pan_number: v})}
+                  onChange={(v) => setOrg({ ...org, pan_number: v })}
                   icon="credit_card"
                 />
               </div>
 
               {/* Status Section */}
               <div className="flex gap-4 p-4 bg-slate-50 rounded-xl border border-slate-100">
-                 <div className="flex-1">
-                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Status</div>
-                    <div className="text-sm font-bold text-slate-700">{org?.status || 'Active'}</div>
-                 </div>
-                 <div className="flex-1">
-                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Plan</div>
-                    <div className="text-sm font-bold text-slate-700">{org?.subscription_plan || 'Professional'}</div>
-                 </div>
-                 <div className="flex-1">
-                    <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Org ID</div>
-                    <div className="text-sm font-bold text-slate-700">{org?.org_id}</div>
-                 </div>
+                <div className="flex-1">
+                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                    Status
+                  </div>
+                  <div className="text-sm font-bold text-slate-700">{org?.status || "Active"}</div>
+                </div>
+                <div className="flex-1">
+                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                    Plan
+                  </div>
+                  <div className="text-sm font-bold text-slate-700">
+                    {org?.subscription_plan || "Professional"}
+                  </div>
+                </div>
+                <div className="flex-1">
+                  <div className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
+                    Org ID
+                  </div>
+                  <div className="text-sm font-bold text-slate-700">{org?.org_id}</div>
+                </div>
               </div>
             </div>
           </motion.div>
@@ -414,26 +413,30 @@ export const SettingsPage = () => {
                 <EditField
                   label="Primary Contact Name"
                   value={org?.contact?.primary_name || ""}
-                  onChange={(v) => setOrg({...org, contact: {...org.contact, primary_name: v}})}
+                  onChange={(v) => setOrg({ ...org, contact: { ...org.contact, primary_name: v } })}
                   icon="person"
                   wide
                 />
                 <EditField
                   label="Primary Phone"
                   value={org?.contact?.primary_phone || ""}
-                  onChange={(v) => setOrg({...org, contact: {...org.contact, primary_phone: v}})}
+                  onChange={(v) =>
+                    setOrg({ ...org, contact: { ...org.contact, primary_phone: v } })
+                  }
                   icon="call"
                 />
                 <EditField
                   label="Primary Email"
                   value={org?.contact?.primary_email || ""}
-                  onChange={(v) => setOrg({...org, contact: {...org.contact, primary_email: v}})}
+                  onChange={(v) =>
+                    setOrg({ ...org, contact: { ...org.contact, primary_email: v } })
+                  }
                   icon="mail"
                 />
                 <EditField
                   label="Official Website"
                   value={org?.website || ""}
-                  onChange={(v) => setOrg({...org, website: v})}
+                  onChange={(v) => setOrg({ ...org, website: v })}
                   icon="language"
                   wide
                 />
@@ -453,31 +456,41 @@ export const SettingsPage = () => {
                 <EditField
                   label="Affiliation Board"
                   value={org?.institute?.affiliation_board || ""}
-                  onChange={(v) => setOrg({...org, institute: {...org.institute, affiliation_board: v}})}
+                  onChange={(v) =>
+                    setOrg({ ...org, institute: { ...org.institute, affiliation_board: v } })
+                  }
                   icon="workspace_premium"
                 />
                 <EditField
                   label="UDISE Code"
                   value={org?.institute?.udise_code || ""}
-                  onChange={(v) => setOrg({...org, institute: {...org.institute, udise_code: v}})}
+                  onChange={(v) =>
+                    setOrg({ ...org, institute: { ...org.institute, udise_code: v } })
+                  }
                   icon="pin"
                 />
                 <EditField
                   label="Institution Type"
                   value={org?.institute?.institution_type || ""}
-                  onChange={(v) => setOrg({...org, institute: {...org.institute, institution_type: v}})}
+                  onChange={(v) =>
+                    setOrg({ ...org, institute: { ...org.institute, institution_type: v } })
+                  }
                   icon="category"
                 />
                 <EditField
                   label="Safety Officer"
                   value={org?.institute?.safety_officer_name || ""}
-                  onChange={(v) => setOrg({...org, institute: {...org.institute, safety_officer_name: v}})}
+                  onChange={(v) =>
+                    setOrg({ ...org, institute: { ...org.institute, safety_officer_name: v } })
+                  }
                   icon="admin_panel_settings"
                 />
                 <EditField
                   label="Officer Contact"
                   value={org?.institute?.safety_officer_contact || ""}
-                  onChange={(v) => setOrg({...org, institute: {...org.institute, safety_officer_contact: v}})}
+                  onChange={(v) =>
+                    setOrg({ ...org, institute: { ...org.institute, safety_officer_contact: v } })
+                  }
                   icon="phone_in_talk"
                 />
               </div>
@@ -496,39 +509,39 @@ export const SettingsPage = () => {
                 <EditField
                   label="Street Address / Line 1"
                   value={org?.address?.address1 || ""}
-                  onChange={(v) => setOrg({...org, address: {...org.address, address1: v}})}
+                  onChange={(v) => setOrg({ ...org, address: { ...org.address, address1: v } })}
                   icon="home"
                   wide
                 />
                 <EditField
                   label="Area / Locality / Line 2"
                   value={org?.address?.address2 || ""}
-                  onChange={(v) => setOrg({...org, address: {...org.address, address2: v}})}
+                  onChange={(v) => setOrg({ ...org, address: { ...org.address, address2: v } })}
                   icon="signpost"
                   wide
                 />
                 <EditField
                   label="City / Town"
                   value={org?.address?.city || ""}
-                  onChange={(v) => setOrg({...org, address: {...org.address, city: v}})}
+                  onChange={(v) => setOrg({ ...org, address: { ...org.address, city: v } })}
                   icon="location_city"
                 />
                 <EditField
                   label="District"
                   value={org?.address?.district || ""}
-                  onChange={(v) => setOrg({...org, address: {...org.address, district: v}})}
+                  onChange={(v) => setOrg({ ...org, address: { ...org.address, district: v } })}
                   icon="map"
                 />
                 <EditField
                   label="State"
                   value={org?.address?.state || ""}
-                  onChange={(v) => setOrg({...org, address: {...org.address, state: v}})}
+                  onChange={(v) => setOrg({ ...org, address: { ...org.address, state: v } })}
                   icon="flag"
                 />
                 <EditField
                   label="PIN Code"
                   value={org?.address?.pincode || ""}
-                  onChange={(v) => setOrg({...org, address: {...org.address, pincode: v}})}
+                  onChange={(v) => setOrg({ ...org, address: { ...org.address, pincode: v } })}
                   icon="pin"
                 />
               </div>
@@ -550,39 +563,51 @@ export const SettingsPage = () => {
                   { label: "Registration Cert", key: "registration_cert" },
                 ].map((doc) => (
                   <div key={doc.key} className="flex flex-col gap-2">
-                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">{doc.label}</label>
+                    <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                      {doc.label}
+                    </label>
                     <div className="relative group">
                       {org?.documents?.[doc.key] ? (
                         <div className="flex flex-col gap-2">
                           <div className="p-3 bg-slate-50 border border-slate-200 rounded-lg flex items-center justify-between">
-                             <div className="flex items-center gap-2 overflow-hidden">
-                                <span className="material-symbols-outlined text-primary text-sm">file_present</span>
-                                <span className="text-xs font-bold text-slate-600 truncate">{org.documents[doc.key].split('/').pop()}</span>
-                             </div>
-                             <a 
-                               href={org.documents[doc.key]} 
-                               target="_blank" 
-                               rel="noreferrer"
-                               className="text-[10px] font-bold text-primary hover:underline"
-                             >
-                               VIEW
-                             </a>
+                            <div className="flex items-center gap-2 overflow-hidden">
+                              <span className="material-symbols-outlined text-primary text-sm">
+                                file_present
+                              </span>
+                              <span className="text-xs font-bold text-slate-600 truncate">
+                                {org.documents[doc.key].split("/").pop()}
+                              </span>
+                            </div>
+                            <a
+                              href={org.documents[doc.key]}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="text-[10px] font-bold text-primary hover:underline"
+                            >
+                              VIEW
+                            </a>
                           </div>
-                          <button 
+                          <button
                             className="text-[10px] font-bold text-red-500 hover:text-red-600 flex items-center gap-1"
-                            onClick={() => setOrg({...org, documents: {...org.documents, [doc.key]: ""}})}
+                            onClick={() =>
+                              setOrg({ ...org, documents: { ...org.documents, [doc.key]: "" } })
+                            }
                           >
                             <span className="material-symbols-outlined text-sm">delete</span> REMOVE
                           </button>
                         </div>
                       ) : (
                         <div className="border-2 border-dashed border-slate-200 rounded-xl p-6 flex flex-col items-center justify-center gap-2 hover:border-primary/50 transition-colors cursor-pointer bg-slate-50/50">
-                          <span className="material-symbols-outlined text-slate-300 text-3xl">upload_file</span>
-                          <span className="text-[10px] font-bold text-slate-400">UPLOAD {doc.label}</span>
-                          <input 
-                            type="file" 
+                          <span className="material-symbols-outlined text-slate-300 text-3xl">
+                            upload_file
+                          </span>
+                          <span className="text-[10px] font-bold text-slate-400">
+                            UPLOAD {doc.label}
+                          </span>
+                          <input
+                            type="file"
                             name={doc.key}
-                            className="absolute inset-0 opacity-0 cursor-pointer" 
+                            className="absolute inset-0 opacity-0 cursor-pointer"
                             onChange={async (e) => {
                               const file = e.target.files?.[0];
                               if (file) {
@@ -632,8 +657,12 @@ export const SettingsPage = () => {
                     }}
                   >
                     <div>
-                      <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>{item.label}</div>
-                      <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 3 }}>{item.sub}</div>
+                      <div style={{ fontSize: 13, fontWeight: 800, color: "var(--text)" }}>
+                        {item.label}
+                      </div>
+                      <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 3 }}>
+                        {item.sub}
+                      </div>
                     </div>
                     <Toggle checked={toggles[item.i]} onChange={() => tog(item.i)} />
                   </div>
@@ -642,33 +671,33 @@ export const SettingsPage = () => {
             </div>
 
             <div style={card}>
-                <CardHeader
-                  icon="info"
-                  title="App Metadata"
-                  subtitle="System build information."
-                />
-                <div style={{ padding: "16px 22px" }}>
-                  {[
-                    { k: "App Version", v: "v2.4.1" },
-                    { k: "Last Sync", v: new Date().toLocaleDateString() },
-                    { k: "API Status", v: "Connected" },
-                  ].map((r, i, arr) => (
-                    <div
-                      key={r.k}
-                      style={{
-                        display: "flex",
-                        justifyContent: "space-between",
-                        alignItems: "center",
-                        padding: "10px 0",
-                        borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none",
-                      }}
-                    >
-                      <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>{r.k}</span>
-                      <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text)" }}>{r.v}</span>
-                    </div>
-                  ))}
-                </div>
+              <CardHeader icon="info" title="App Metadata" subtitle="System build information." />
+              <div style={{ padding: "16px 22px" }}>
+                {[
+                  { k: "App Version", v: "v2.4.1" },
+                  { k: "Last Sync", v: new Date().toLocaleDateString() },
+                  { k: "API Status", v: "Connected" },
+                ].map((r, i, arr) => (
+                  <div
+                    key={r.k}
+                    style={{
+                      display: "flex",
+                      justifyContent: "space-between",
+                      alignItems: "center",
+                      padding: "10px 0",
+                      borderBottom: i < arr.length - 1 ? "1px solid var(--border)" : "none",
+                    }}
+                  >
+                    <span style={{ fontSize: 12, fontWeight: 700, color: "var(--muted)" }}>
+                      {r.k}
+                    </span>
+                    <span style={{ fontSize: 12, fontWeight: 800, color: "var(--text)" }}>
+                      {r.v}
+                    </span>
+                  </div>
+                ))}
               </div>
+            </div>
           </motion.div>
         </motion.div>
       </div>

@@ -10,11 +10,7 @@ interface AlertMessageProps {
   onClose: () => void; // A function to handle closing the alert
 }
 
-const AlertMessage: React.FC<AlertMessageProps> = ({
-  message,
-  type,
-  onClose,
-}) => {
+const AlertMessage: React.FC<AlertMessageProps> = ({ message, type, onClose }) => {
   // Define base styles and type-specific styles using Tailwind CSS
   const baseClasses =
     "fixed top-5 left-1/2 -translate-x-1/2 w-11/12 w-auto p-4 rounded-lg shadow-xl flex justify-between items-center z-50";

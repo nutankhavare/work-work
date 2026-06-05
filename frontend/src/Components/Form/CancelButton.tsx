@@ -1,6 +1,6 @@
 // src/Components/Form/CancelButton.tsx
 import { type ButtonHTMLAttributes, type ReactNode } from "react";
-import { MdCancel} from "react-icons/md";
+import { MdCancel } from "react-icons/md";
 import { CgSpinner } from "react-icons/cg";
 
 // 1. Extend standard button attributes
@@ -19,12 +19,10 @@ const CancelButton = ({
   children, // allows wrapping content if needed
   ...props // 2. Capture all other props (onClick, type, onHover, etc.)
 }: CancelButtonProps) => {
-
   return (
     <button
       // 3. Spread the props onto the HTML button
-      {...props} 
-      
+      {...props}
       disabled={isSaving || disabled}
       className={`
         relative inline-flex items-center justify-center
@@ -42,13 +40,9 @@ const CancelButton = ({
       {isSaving ? (
         <CgSpinner className="animate-spin text-xl" />
       ) : (
-        <span className="text-lg">
-          {icon || <MdCancel />}
-        </span>
+        <span className="text-lg">{icon || <MdCancel />}</span>
       )}
-      <span>
-        {isSaving ? "Processing..." : label}
-      </span>
+      <span>{isSaving ? "Processing..." : label}</span>
     </button>
   );
 };

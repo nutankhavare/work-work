@@ -23,22 +23,14 @@ import {
   Car,
   Fuel,
   Download,
-  FileText
+  FileText,
 } from "lucide-react";
 
 // Components
 import PageHeader from "../../Components/UI/PageHeader";
 import EmptyState from "../../Components/UI/EmptyState";
 import { Pagination } from "../../Components/Table/Pagination";
-import {
-  TableContainer,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-} from "../../Components/Table/Table";
+import { TableContainer, Table, Thead, Tbody, Tr, Th, Td } from "../../Components/Table/Table";
 import { Loader } from "../../Components/UI/Loader";
 import tenantApi from "../../Services/ApiService";
 import type { Vehicle } from "./Vehicle.types";
@@ -49,14 +41,7 @@ import ExportOverlay from "../../Components/UI/ExportOverlay";
 import { formatDateTime } from "../../Utils/Toolkit";
 
 /* ── STAT CARD COMPONENT ── */
-const StatCard = ({
-  title,
-  value,
-  subtext,
-  icon: Icon,
-  colorClass,
-  delay = 0,
-}: any) => (
+const StatCard = ({ title, value, subtext, icon: Icon, colorClass, delay = 0 }: any) => (
   <motion.div
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
@@ -75,11 +60,7 @@ const StatCard = ({
         </p>
         <div className="flex items-baseline gap-2">
           <h4 className="text-2xl font-[900] text-[#1e293b]">{value}</h4>
-          {subtext && (
-            <span className="text-[11px] font-[700] text-[#059669]">
-              {subtext}
-            </span>
-          )}
+          {subtext && <span className="text-[11px] font-[700] text-[#059669]">{subtext}</span>}
         </div>
       </div>
     </div>
@@ -127,10 +108,7 @@ const VehicleIndexPage = () => {
         ...(typeFilter && { type: typeFilter }),
       };
 
-      const response = await tenantApi.get<PaginatedResponse<Vehicle>>(
-        "/vehicles",
-        { params }
-      );
+      const response = await tenantApi.get<PaginatedResponse<Vehicle>>("/vehicles", { params });
 
       if (response.data.success && response.data.data) {
         const data = response.data.data.data || [];
@@ -150,9 +128,48 @@ const VehicleIndexPage = () => {
       console.error("Error fetching vehicles, using mock data", err);
       // showAlert("Failed to load vehicle data.", "error"); // Disable alert for mock mode
       const mockVehicles: Vehicle[] = [
-        { id: 1, vehicle_name: "School Bus A", vehicle_number: "KA-01-MV-1234", make: "Tata", model: "Starbus", vehicle_type: "Bus", status: "Active", capacity: 40, fuel_type: "Diesel", gps_device_id: "GPS-101", battery: 85, speed: 0 } as any,
-        { id: 2, vehicle_name: "Staff Van 1", vehicle_number: "KA-01-MV-5678", make: "Force", model: "Traveller", vehicle_type: "Van", status: "Active", capacity: 12, fuel_type: "Diesel", gps_device_id: "GPS-102", battery: 92, speed: 45 } as any,
-        { id: 3, vehicle_name: "Principal's Car", vehicle_number: "KA-01-MV-9012", make: "Toyota", model: "Innova", vehicle_type: "Car", status: "Maintenance", capacity: 7, fuel_type: "Petrol", gps_device_id: "GPS-103", battery: 78, speed: 0 } as any,
+        {
+          id: 1,
+          vehicle_name: "School Bus A",
+          vehicle_number: "KA-01-MV-1234",
+          make: "Tata",
+          model: "Starbus",
+          vehicle_type: "Bus",
+          status: "Active",
+          capacity: 40,
+          fuel_type: "Diesel",
+          gps_device_id: "GPS-101",
+          battery: 85,
+          speed: 0,
+        } as any,
+        {
+          id: 2,
+          vehicle_name: "Staff Van 1",
+          vehicle_number: "KA-01-MV-5678",
+          make: "Force",
+          model: "Traveller",
+          vehicle_type: "Van",
+          status: "Active",
+          capacity: 12,
+          fuel_type: "Diesel",
+          gps_device_id: "GPS-102",
+          battery: 92,
+          speed: 45,
+        } as any,
+        {
+          id: 3,
+          vehicle_name: "Principal's Car",
+          vehicle_number: "KA-01-MV-9012",
+          make: "Toyota",
+          model: "Innova",
+          vehicle_type: "Car",
+          status: "Maintenance",
+          capacity: 7,
+          fuel_type: "Petrol",
+          gps_device_id: "GPS-103",
+          battery: 78,
+          speed: 0,
+        } as any,
       ];
       setVehicles(mockVehicles);
       setTotalPages(1);
@@ -182,7 +199,12 @@ const VehicleIndexPage = () => {
   // };
 
   const handleDelete = async (vehicle: Vehicle) => {
-    if (!(await confirm(`Are you sure you want to PERMANENTLY DECOMMISSION vehicle ${vehicle.vehicle_number}? All associated telemetry and permit history will be archived.`))) return;
+    if (
+      !(await confirm(
+        `Are you sure you want to PERMANENTLY DECOMMISSION vehicle ${vehicle.vehicle_number}? All associated telemetry and permit history will be archived.`,
+      ))
+    )
+      return;
     try {
       const response = await tenantApi.delete(`/vehicles/${vehicle.id}`);
       if (response.data.success) {
@@ -194,91 +216,105 @@ const VehicleIndexPage = () => {
     }
   };
 
-  const buildBulkPdf = useCallback((opts: any) => {
-    const doc = new jsPDF({ orientation: "landscape" });
-    const pw = doc.internal.pageSize.getWidth();
-    
-    doc.setFillColor(124, 58, 237);
-    doc.rect(0, 0, pw, 35, "F");
+  const buildBulkPdf = useCallback(
+    (opts: any) => {
+      const doc = new jsPDF({ orientation: "landscape" });
+      const pw = doc.internal.pageSize.getWidth();
 
-    if (opts.logo) {
-      try { doc.addImage(opts.logo, "PNG", 14, 5, 25, 25); } catch(e){}
-    }
+      doc.setFillColor(124, 58, 237);
+      doc.rect(0, 0, pw, 35, "F");
 
-    doc.setFontSize(20);
-    doc.setTextColor(255);
-    doc.text(opts.companyName || "Vehicle Fleet Registry", opts.logo ? 45 : 14, 18);
-    doc.setFontSize(10);
-    doc.setTextColor(220, 220, 255);
-    doc.text(opts.subtitle || `Asset Inventory Report · ${new Date().toLocaleDateString()}`, opts.logo ? 45 : 14, 26);
+      if (opts.logo) {
+        try {
+          doc.addImage(opts.logo, "PNG", 14, 5, 25, 25);
+        } catch (e) {}
+      }
 
-    autoTable(doc, {
-      startY: 45,
-      head: [["Name", "Number", "Make", "Model", "Type", "Status"]],
-      body: vehicles.map(v => [
-        v.vehicle_name || "",
-        v.vehicle_number || "",
-        v.make || "",
-        v.model || "",
-        v.vehicle_type || "",
-        v.status || ""
-      ]),
-      theme: 'grid',
-      headStyles: { fillColor: [124, 58, 237] }
-    });
-
-    const ph = doc.internal.pageSize.getHeight();
-    doc.setFontSize(8);
-    doc.setTextColor(150);
-    doc.text(opts.footerText || "Confidential Fleet Inventory Record", 14, ph - 10);
-    return doc;
-  }, [vehicles]);
-
-  const buildIndividualPdf = useCallback((v: Vehicle) => (opts: any) => {
-    const doc = new jsPDF();
-    const pw = doc.internal.pageSize.getWidth();
-    
-    doc.setFillColor(124, 58, 237);
-    doc.rect(0, 0, pw, 45, "F");
-
-    if (opts.logo) {
-      try { doc.addImage(opts.logo, "PNG", 14, 10, 25, 25); } catch(e){}
-    }
-    
-    const x = opts.logo ? 45 : 20;
-    doc.setFontSize(22);
-    doc.setTextColor(255);
-    doc.text(opts.companyName || `Asset: ${v.vehicle_number}`, x, 22);
-    
-    doc.setFontSize(10);
-    doc.setTextColor(220, 210, 255);
-    doc.text(opts.subtitle || `${v.make} ${v.model} · ${v.vehicle_type}`, x, 32);
-
-    let y = 60;
-    const field = (label: string, value: any) => {
-      doc.setFontSize(9);
-      doc.setTextColor(148, 163, 184);
-      doc.text(label, 20, y);
+      doc.setFontSize(20);
+      doc.setTextColor(255);
+      doc.text(opts.companyName || "Vehicle Fleet Registry", opts.logo ? 45 : 14, 18);
       doc.setFontSize(10);
-      doc.setTextColor(30, 41, 59);
-      doc.text(String(value || "—"), 75, y);
-      y += 10;
-    };
+      doc.setTextColor(220, 220, 255);
+      doc.text(
+        opts.subtitle || `Asset Inventory Report · ${new Date().toLocaleDateString()}`,
+        opts.logo ? 45 : 14,
+        26,
+      );
 
-    field("Vehicle Name:", v.vehicle_name);
-    field("Registration #:", v.vehicle_number);
-    field("Make / Manufacturer:", v.make);
-    field("Model Designation:", v.model);
-    field("Asset Category:", v.vehicle_type);
-    field("Seating Capacity:", v.seating_capacity);
-    field("Current Condition:", (v.status || "").toUpperCase());
+      autoTable(doc, {
+        startY: 45,
+        head: [["Name", "Number", "Make", "Model", "Type", "Status"]],
+        body: vehicles.map((v) => [
+          v.vehicle_name || "",
+          v.vehicle_number || "",
+          v.make || "",
+          v.model || "",
+          v.vehicle_type || "",
+          v.status || "",
+        ]),
+        theme: "grid",
+        headStyles: { fillColor: [124, 58, 237] },
+      });
 
-    const ph = doc.internal.pageSize.getHeight();
-    doc.setFontSize(8);
-    doc.setTextColor(150);
-    doc.text(opts.footerText || "Fleet Management Technical Specification", 20, ph - 15);
-    return doc;
-  }, []);
+      const ph = doc.internal.pageSize.getHeight();
+      doc.setFontSize(8);
+      doc.setTextColor(150);
+      doc.text(opts.footerText || "Confidential Fleet Inventory Record", 14, ph - 10);
+      return doc;
+    },
+    [vehicles],
+  );
+
+  const buildIndividualPdf = useCallback(
+    (v: Vehicle) => (opts: any) => {
+      const doc = new jsPDF();
+      const pw = doc.internal.pageSize.getWidth();
+
+      doc.setFillColor(124, 58, 237);
+      doc.rect(0, 0, pw, 45, "F");
+
+      if (opts.logo) {
+        try {
+          doc.addImage(opts.logo, "PNG", 14, 10, 25, 25);
+        } catch (e) {}
+      }
+
+      const x = opts.logo ? 45 : 20;
+      doc.setFontSize(22);
+      doc.setTextColor(255);
+      doc.text(opts.companyName || `Asset: ${v.vehicle_number}`, x, 22);
+
+      doc.setFontSize(10);
+      doc.setTextColor(220, 210, 255);
+      doc.text(opts.subtitle || `${v.make} ${v.model} · ${v.vehicle_type}`, x, 32);
+
+      let y = 60;
+      const field = (label: string, value: any) => {
+        doc.setFontSize(9);
+        doc.setTextColor(148, 163, 184);
+        doc.text(label, 20, y);
+        doc.setFontSize(10);
+        doc.setTextColor(30, 41, 59);
+        doc.text(String(value || "—"), 75, y);
+        y += 10;
+      };
+
+      field("Vehicle Name:", v.vehicle_name);
+      field("Registration #:", v.vehicle_number);
+      field("Make / Manufacturer:", v.make);
+      field("Model Designation:", v.model);
+      field("Asset Category:", v.vehicle_type);
+      field("Seating Capacity:", v.seating_capacity);
+      field("Current Condition:", (v.status || "").toUpperCase());
+
+      const ph = doc.internal.pageSize.getHeight();
+      doc.setFontSize(8);
+      doc.setTextColor(150);
+      doc.text(opts.footerText || "Fleet Management Technical Specification", 20, ph - 15);
+      return doc;
+    },
+    [],
+  );
 
   const getVehicleIcon = (type: string | null | undefined) => {
     const t = (type || "").toLowerCase();
@@ -300,16 +336,22 @@ const VehicleIndexPage = () => {
           buttonText="Add Vehicle"
           buttonLink="/vehicles/create"
         >
-             <button onClick={() => setShowBulkExport(true)} className="w-full md:w-auto flex justify-center items-center gap-2 px-5 py-[11px] bg-white text-[#475569] border border-[#e2e8f0] rounded-[10px] text-[12.5px] font-[800] shadow-sm hover:bg-[#f8fafc] hover:border-[#7c3aed] hover:text-[#7c3aed] transition-all duration-200">
-                <Download size={16} />
-                Export PDF
-             </button>
+          <button
+            onClick={() => setShowBulkExport(true)}
+            className="w-full md:w-auto flex justify-center items-center gap-2 px-5 py-[11px] bg-white text-[#475569] border border-[#e2e8f0] rounded-[10px] text-[12.5px] font-[800] shadow-sm hover:bg-[#f8fafc] hover:border-[#7c3aed] hover:text-[#7c3aed] transition-all duration-200"
+          >
+            <Download size={16} />
+            Export PDF
+          </button>
         </PageHeader>
       </div>
 
       {/* Mobile Actions Stack */}
       <div className="lg:hidden flex flex-col gap-3 mb-6 px-4">
-        <button onClick={() => setShowBulkExport(true)} className="btn btn-secondary w-full justify-center">
+        <button
+          onClick={() => setShowBulkExport(true)}
+          className="btn btn-secondary w-full justify-center"
+        >
           <Download size={18} />
           Export Fleet PDF
         </button>
@@ -347,13 +389,12 @@ const VehicleIndexPage = () => {
           value={stats.inactive}
           icon={X}
           colorClass="bg-[#fef2f2] text-[#dc2626]"
-        delay={0.15}
+          delay={0.15}
         />
       </div>
 
       {/* Main Content Card */}
       <div className="bg-white rounded-[18px] border border-[#eef2f6] shadow-[0_2px_12px_rgba(30,41,59,0.03)] overflow-hidden">
-        
         {/* Search & Filters */}
         <div className="p-6 border-b border-[#f1f5f9] bg-[#fafbff]/50">
           <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-end">
@@ -402,18 +443,15 @@ const VehicleIndexPage = () => {
                 <option value="inactive">Inactive</option>
               </select>
             </div>
-
-            </div>
           </div>
+        </div>
 
         {/* Table Content */}
         <div className="relative">
           {loading ? (
             <div className="py-24 flex flex-col items-center gap-4">
               <Loader />
-              <p className="text-[14px] font-[700] text-[#94a3b8]">
-                Fetching Fleet Records...
-              </p>
+              <p className="text-[14px] font-[700] text-[#94a3b8]">Fetching Fleet Records...</p>
             </div>
           ) : vehicles.length === 0 ? (
             <div className="py-24">
@@ -511,7 +549,10 @@ const VehicleIndexPage = () => {
                               )}
                               {row.speed !== undefined && (
                                 <div className="font-[900] text-[13px] text-[#1e293b]">
-                                  {row.speed} <span className="text-[10px] font-[700] text-[#94a3b8]">km/h</span>
+                                  {row.speed}{" "}
+                                  <span className="text-[10px] font-[700] text-[#94a3b8]">
+                                    km/h
+                                  </span>
                                 </div>
                               )}
                             </div>
@@ -527,8 +568,8 @@ const VehicleIndexPage = () => {
                               row.status?.toLowerCase() === "active"
                                 ? "bg-[#ecfdf5] text-[#059669] border-[#d1fae5]"
                                 : row.status?.toLowerCase() === "maintenance"
-                                ? "bg-[#fffbeb] text-[#d97706] border-[#fef3c7]"
-                                : "bg-[#fef2f2] text-[#dc2626] border-[#fee2e2]"
+                                  ? "bg-[#fffbeb] text-[#d97706] border-[#fef3c7]"
+                                  : "bg-[#fef2f2] text-[#dc2626] border-[#fee2e2]"
                             }`}
                           >
                             {row.status || "active"}
@@ -553,7 +594,7 @@ const VehicleIndexPage = () => {
                             </Link>
                             <button
                               onClick={async () => {
-                                if(await confirm("Modify this vehicle record?")) {
+                                if (await confirm("Modify this vehicle record?")) {
                                   navigate(`/vehicles/edit/${row.id}`);
                                 }
                               }}
@@ -562,8 +603,12 @@ const VehicleIndexPage = () => {
                             >
                               <Edit size={16} />
                             </button>
-                            <button onClick={() => setIndividualExport(row)} className="p-2 text-[#64748b] hover:text-[#7c3aed] hover:bg-[#ede9fe] rounded-[8px] transition-all" title="Preview Report">
-                               <FileText size={16} />
+                            <button
+                              onClick={() => setIndividualExport(row)}
+                              className="p-2 text-[#64748b] hover:text-[#7c3aed] hover:bg-[#ede9fe] rounded-[8px] transition-all"
+                              title="Preview Report"
+                            >
+                              <FileText size={16} />
                             </button>
                             <button
                               onClick={() => handleDelete(row)}
@@ -595,8 +640,8 @@ const VehicleIndexPage = () => {
 
       <AnimatePresence>
         {showBulkExport && (
-          <ExportOverlay 
-            onClose={() => setShowBulkExport(false)} 
+          <ExportOverlay
+            onClose={() => setShowBulkExport(false)}
             buildPdf={buildBulkPdf}
             title="Export Vehicle Fleet Registry"
             defaultTitle="Fleet Inventory Summary"
@@ -605,8 +650,8 @@ const VehicleIndexPage = () => {
           />
         )}
         {individualExport && (
-          <ExportOverlay 
-            onClose={() => setIndividualExport(null)} 
+          <ExportOverlay
+            onClose={() => setIndividualExport(null)}
             buildPdf={buildIndividualPdf(individualExport)}
             title={`Export Asset Specification Report`}
             defaultTitle={`Vehicle: ${individualExport.vehicle_number}`}

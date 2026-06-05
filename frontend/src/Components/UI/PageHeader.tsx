@@ -4,7 +4,7 @@ import { Plus, Menu, ArrowLeft } from "lucide-react";
 
 interface HeaderProps {
   title: string;
-  icon?: string | React.ReactNode; 
+  icon?: string | React.ReactNode;
   breadcrumb?: string;
   buttonText?: string;
   buttonLink?: string;
@@ -27,7 +27,11 @@ const PageHeader: React.FC<HeaderProps> = ({
 
   const renderIcon = () => {
     if (typeof icon === "string") {
-      return <span className="material-symbols-outlined ms" style={{ fontSize: "18px" }}>{icon}</span>;
+      return (
+        <span className="material-symbols-outlined ms" style={{ fontSize: "18px" }}>
+          {icon}
+        </span>
+      );
     }
     return icon;
   };
@@ -42,9 +46,9 @@ const PageHeader: React.FC<HeaderProps> = ({
         </div>
         {breadcrumb && (
           <div className="breadcrumb truncate">
-            {breadcrumb.split('/').map((item, index, arr) => (
+            {breadcrumb.split("/").map((item, index, arr) => (
               <React.Fragment key={index}>
-                <span 
+                <span
                   className={index === 0 ? "cursor-pointer hover:underline" : ""}
                   onClick={index === 0 ? () => navigate("/dashboard") : undefined}
                 >
@@ -60,11 +64,11 @@ const PageHeader: React.FC<HeaderProps> = ({
       {/* Right side: Hamburger & Actions */}
       <div className="flex items-center gap-2 shrink-0">
         {/* Toggle Button - Visible only on mobile/tablet */}
-        <button 
-          className="lg:hidden mobile-toggle flex items-center justify-center shrink-0 w-[42px] h-[42px] bg-white border border-slate-200 rounded-xl shadow-sm active:scale-95 transition-all text-slate-700" 
+        <button
+          className="lg:hidden mobile-toggle flex items-center justify-center shrink-0 w-[42px] h-[42px] bg-white border border-slate-200 rounded-xl shadow-sm active:scale-95 transition-all text-slate-700"
           title="Open Sidebar"
           onClick={() => {
-             document.dispatchEvent(new CustomEvent('toggle-sidebar'));
+            document.dispatchEvent(new CustomEvent("toggle-sidebar"));
           }}
         >
           <Menu size={24} strokeWidth={2.5} />
@@ -75,20 +79,14 @@ const PageHeader: React.FC<HeaderProps> = ({
           {children}
 
           {showBackButton && (
-            <button 
-              onClick={() => navigate(backButtonLink)}
-              className="btn btn-secondary"
-            >
+            <button onClick={() => navigate(backButtonLink)} className="btn btn-secondary">
               <ArrowLeft size={16} strokeWidth={2.5} />
               Back to List
             </button>
           )}
-          
+
           {buttonLink && buttonText && (
-            <Link
-              to={buttonLink}
-              className="btn btn-primary"
-            >
+            <Link to={buttonLink} className="btn btn-primary">
               <Plus size={16} strokeWidth={2.5} />
               {buttonText}
             </Link>

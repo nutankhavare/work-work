@@ -1,4 +1,4 @@
-export type AuthStatus = 'unauthenticated' | 'authenticated' | 'checking';
+export type AuthStatus = "unauthenticated" | "authenticated" | "checking";
 
 export interface AuthUser {
   id: number;

@@ -25,22 +25,14 @@ import {
   // FileSpreadsheet,
   FileText,
   Plus,
-  IdCard
+  IdCard,
 } from "lucide-react";
 
 // Components
 import PageHeader from "../../Components/UI/PageHeader";
 import EmptyState from "../../Components/UI/EmptyState";
 import { Pagination } from "../../Components/Table/Pagination";
-import {
-  TableContainer,
-  Table,
-  Thead,
-  Tbody,
-  Tr,
-  Th,
-  Td,
-} from "../../Components/Table/Table";
+import { TableContainer, Table, Thead, Tbody, Tr, Th, Td } from "../../Components/Table/Table";
 import { Loader } from "../../Components/UI/Loader";
 import tenantApi, { tenantAsset } from "../../Services/ApiService";
 import { DUMMY_USER_IMAGE } from "../../Utils/Toolkit";
@@ -51,14 +43,7 @@ import { useConfirm } from "../../Context/ConfirmContext";
 import ExportOverlay from "../../Components/UI/ExportOverlay";
 
 /* ── STAT CARD COMPONENT ── */
-const StatCard = ({
-  title,
-  value,
-  subtext,
-  icon: Icon,
-  colorClass,
-  delay = 0,
-}: any) => (
+const StatCard = ({ title, value, subtext, icon: Icon, colorClass, delay = 0 }: any) => (
   <motion.div
     initial={{ opacity: 0, y: 20 }}
     animate={{ opacity: 1, y: 0 }}
@@ -77,11 +62,7 @@ const StatCard = ({
         </p>
         <div className="flex items-baseline gap-2">
           <h4 className="text-2xl font-[900] text-[#1e293b]">{value}</h4>
-          {subtext && (
-            <span className="text-[11px] font-[700] text-[#059669]">
-              {subtext}
-            </span>
-          )}
+          {subtext && <span className="text-[11px] font-[700] text-[#059669]">{subtext}</span>}
         </div>
       </div>
     </div>
@@ -127,10 +108,9 @@ const DriverIndexPage = () => {
   const fetchDrivers = useCallback(async () => {
     try {
       setLoading(true);
-      const response = await tenantApi.get<PaginatedResponse<Driver>>(
-        "/drivers",
-        { params: { page: currentPage, per_page: perPage } }
-      );
+      const response = await tenantApi.get<PaginatedResponse<Driver>>("/drivers", {
+        params: { page: currentPage, per_page: perPage },
+      });
 
       if (response.data.success && response.data.data) {
         const drivers = response.data.data.data || [];
@@ -138,29 +118,17 @@ const DriverIndexPage = () => {
         setDisplayDrivers(drivers);
 
         // Extract unique filter options
-        setCities(
-          Array.from(
-            new Set(drivers.map((d) => d.city).filter(Boolean))
-          ) as string[]
-        );
+        setCities(Array.from(new Set(drivers.map((d) => d.city).filter(Boolean))) as string[]);
         setEmploymentTypes(
-          Array.from(
-            new Set(drivers.map((d) => d.employment_type).filter(Boolean))
-          ) as string[]
+          Array.from(new Set(drivers.map((d) => d.employment_type).filter(Boolean))) as string[],
         );
 
         // Stats
         setStats({
           total: response.data.data.total || drivers.length,
-          active: drivers.filter(
-            (d) => d.status?.toLowerCase() === "active"
-          ).length,
-          inactive: drivers.filter(
-            (d) => d.status?.toLowerCase() === "inactive"
-          ).length,
-          experienced: drivers.filter(
-            (d) => (d.driving_experience || 0) >= 3
-          ).length,
+          active: drivers.filter((d) => d.status?.toLowerCase() === "active").length,
+          inactive: drivers.filter((d) => d.status?.toLowerCase() === "inactive").length,
+          experienced: drivers.filter((d) => (d.driving_experience || 0) >= 3).length,
         });
 
         setTotalPages(response.data.data.last_page);
@@ -170,9 +138,42 @@ const DriverIndexPage = () => {
       console.error("Error fetching drivers, using mock data", err);
       // showAlert("Failed to load driver data.", "error"); // Disable alert for mock mode
       const mockDrivers: Driver[] = [
-        { id: 1, first_name: "Rahul", last_name: "Sharma", employee_id: "DRV001", mobile_number: "+91 9876543210", email: "rahul@example.com", city: "Mumbai", status: "Active", driving_experience: 5, employment_type: "Full-time" } as any,
-        { id: 2, first_name: "Amit", last_name: "Patel", employee_id: "DRV002", mobile_number: "+91 8765432109", email: "amit@example.com", city: "Ahmedabad", status: "Active", driving_experience: 3, employment_type: "Contract" } as any,
-        { id: 3, first_name: "Suresh", last_name: "Kumar", employee_id: "DRV003", mobile_number: "+91 7654321098", email: "suresh@example.com", city: "Delhi", status: "Inactive", driving_experience: 8, employment_type: "Full-time" } as any,
+        {
+          id: 1,
+          first_name: "Rahul",
+          last_name: "Sharma",
+          employee_id: "DRV001",
+          mobile_number: "+91 9876543210",
+          email: "rahul@example.com",
+          city: "Mumbai",
+          status: "Active",
+          driving_experience: 5,
+          employment_type: "Full-time",
+        } as any,
+        {
+          id: 2,
+          first_name: "Amit",
+          last_name: "Patel",
+          employee_id: "DRV002",
+          mobile_number: "+91 8765432109",
+          email: "amit@example.com",
+          city: "Ahmedabad",
+          status: "Active",
+          driving_experience: 3,
+          employment_type: "Contract",
+        } as any,
+        {
+          id: 3,
+          first_name: "Suresh",
+          last_name: "Kumar",
+          employee_id: "DRV003",
+          mobile_number: "+91 7654321098",
+          email: "suresh@example.com",
+          city: "Delhi",
+          status: "Inactive",
+          driving_experience: 8,
+          employment_type: "Full-time",
+        } as any,
       ];
       setAllDrivers(mockDrivers);
       setDisplayDrivers(mockDrivers);
@@ -197,10 +198,8 @@ const DriverIndexPage = () => {
   useEffect(() => {
     let result = allDrivers;
     if (selectedCity) result = result.filter((d) => d.city === selectedCity);
-    if (selectedStatus)
-      result = result.filter((d) => d.status === selectedStatus);
-    if (selectedEmployment)
-      result = result.filter((d) => d.employment_type === selectedEmployment);
+    if (selectedStatus) result = result.filter((d) => d.status === selectedStatus);
+    if (selectedEmployment) result = result.filter((d) => d.employment_type === selectedEmployment);
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       result = result.filter(
@@ -208,7 +207,7 @@ const DriverIndexPage = () => {
           `${d.first_name} ${d.last_name}`.toLowerCase().includes(q) ||
           (d.email ?? "").toLowerCase().includes(q) ||
           (d.mobile_number ?? "").includes(q) ||
-          (d.employee_id ?? "").toLowerCase().includes(q)
+          (d.employee_id ?? "").toLowerCase().includes(q),
       );
     }
     setDisplayDrivers(result);
@@ -223,7 +222,11 @@ const DriverIndexPage = () => {
   // };
 
   const handleDelete = async (driver: Driver) => {
-    if (!(await confirm(`Are you sure you want to PERMANENTLY DELETE driver ${driver.first_name} ${driver.last_name}? This action cannot be undone.`)))
+    if (
+      !(await confirm(
+        `Are you sure you want to PERMANENTLY DELETE driver ${driver.first_name} ${driver.last_name}? This action cannot be undone.`,
+      ))
+    )
       return;
     try {
       const response = await tenantApi.delete(`/drivers/${driver.id}`);
@@ -238,91 +241,105 @@ const DriverIndexPage = () => {
     }
   };
 
-  const buildBulkPdf = useCallback((opts: any) => {
-    const doc = new jsPDF({ orientation: "landscape" });
-    const pw = doc.internal.pageSize.getWidth();
-    
-    doc.setFillColor(124, 58, 237);
-    doc.rect(0, 0, pw, 35, "F");
+  const buildBulkPdf = useCallback(
+    (opts: any) => {
+      const doc = new jsPDF({ orientation: "landscape" });
+      const pw = doc.internal.pageSize.getWidth();
 
-    if (opts.logo) {
-      try { doc.addImage(opts.logo, "PNG", 14, 5, 25, 25); } catch(e){}
-    }
+      doc.setFillColor(124, 58, 237);
+      doc.rect(0, 0, pw, 35, "F");
 
-    doc.setFontSize(20);
-    doc.setTextColor(255);
-    doc.text(opts.companyName || "Driver Fleet Report", opts.logo ? 45 : 14, 18);
-    doc.setFontSize(10);
-    doc.setTextColor(220, 220, 255);
-    doc.text(opts.subtitle || `Fleet Personnel Intelligence · ${new Date().toLocaleDateString()}`, opts.logo ? 45 : 14, 26);
+      if (opts.logo) {
+        try {
+          doc.addImage(opts.logo, "PNG", 14, 5, 25, 25);
+        } catch (e) {}
+      }
 
-    autoTable(doc, {
-      startY: 45,
-      head: [["ID", "Name", "Email", "Phone", "City", "Status"]],
-      body: displayDrivers.map(d => [
-        d.employee_id || "",
-        `${d.first_name} ${d.last_name}`,
-        d.email || "",
-        d.mobile_number || "",
-        d.city || "",
-        d.status || ""
-      ]),
-      theme: 'grid',
-      headStyles: { fillColor: [124, 58, 237] }
-    });
-
-    const ph = doc.internal.pageSize.getHeight();
-    doc.setFontSize(8);
-    doc.setTextColor(150);
-    doc.text(opts.footerText || "Sensitive Fleet Data — Institutional Use Only", 14, ph - 10);
-    return doc;
-  }, [displayDrivers]);
-
-  const buildIndividualPdf = useCallback((d: Driver) => (opts: any) => {
-    const doc = new jsPDF();
-    const pw = doc.internal.pageSize.getWidth();
-    
-    doc.setFillColor(124, 58, 237);
-    doc.rect(0, 0, pw, 45, "F");
-
-    if (opts.logo) {
-      try { doc.addImage(opts.logo, "PNG", 14, 10, 25, 25); } catch(e){}
-    }
-    
-    const x = opts.logo ? 45 : 20;
-    doc.setFontSize(22);
-    doc.setTextColor(255);
-    doc.text(opts.companyName || `${d.first_name} ${d.last_name}`, x, 22);
-    
-    doc.setFontSize(10);
-    doc.setTextColor(220, 210, 255);
-    doc.text(opts.subtitle || `Driving Professional · ID: ${d.employee_id}`, x, 32);
-
-    let y = 60;
-    const field = (label: string, value: any) => {
-      doc.setFontSize(9);
-      doc.setTextColor(148, 163, 184);
-      doc.text(label, 20, y);
+      doc.setFontSize(20);
+      doc.setTextColor(255);
+      doc.text(opts.companyName || "Driver Fleet Report", opts.logo ? 45 : 14, 18);
       doc.setFontSize(10);
-      doc.setTextColor(30, 41, 59);
-      doc.text(String(value || "—"), 75, y);
-      y += 10;
-    };
+      doc.setTextColor(220, 220, 255);
+      doc.text(
+        opts.subtitle || `Fleet Personnel Intelligence · ${new Date().toLocaleDateString()}`,
+        opts.logo ? 45 : 14,
+        26,
+      );
 
-    field("Full Name:", `${d.first_name} ${d.last_name}`);
-    field("Professional ID:", d.employee_id);
-    field("Primary Contact:", d.mobile_number);
-    field("Email Identity:", d.email);
-    field("Locality:", d.city);
-    field("Employment Type:", d.employment_type);
-    field("Current Status:", (d.status || "").toUpperCase());
+      autoTable(doc, {
+        startY: 45,
+        head: [["ID", "Name", "Email", "Phone", "City", "Status"]],
+        body: displayDrivers.map((d) => [
+          d.employee_id || "",
+          `${d.first_name} ${d.last_name}`,
+          d.email || "",
+          d.mobile_number || "",
+          d.city || "",
+          d.status || "",
+        ]),
+        theme: "grid",
+        headStyles: { fillColor: [124, 58, 237] },
+      });
 
-    const ph = doc.internal.pageSize.getHeight();
-    doc.setFontSize(8);
-    doc.setTextColor(150);
-    doc.text(opts.footerText || "Professional Credential Record", 20, ph - 15);
-    return doc;
-  }, []);
+      const ph = doc.internal.pageSize.getHeight();
+      doc.setFontSize(8);
+      doc.setTextColor(150);
+      doc.text(opts.footerText || "Sensitive Fleet Data — Institutional Use Only", 14, ph - 10);
+      return doc;
+    },
+    [displayDrivers],
+  );
+
+  const buildIndividualPdf = useCallback(
+    (d: Driver) => (opts: any) => {
+      const doc = new jsPDF();
+      const pw = doc.internal.pageSize.getWidth();
+
+      doc.setFillColor(124, 58, 237);
+      doc.rect(0, 0, pw, 45, "F");
+
+      if (opts.logo) {
+        try {
+          doc.addImage(opts.logo, "PNG", 14, 10, 25, 25);
+        } catch (e) {}
+      }
+
+      const x = opts.logo ? 45 : 20;
+      doc.setFontSize(22);
+      doc.setTextColor(255);
+      doc.text(opts.companyName || `${d.first_name} ${d.last_name}`, x, 22);
+
+      doc.setFontSize(10);
+      doc.setTextColor(220, 210, 255);
+      doc.text(opts.subtitle || `Driving Professional · ID: ${d.employee_id}`, x, 32);
+
+      let y = 60;
+      const field = (label: string, value: any) => {
+        doc.setFontSize(9);
+        doc.setTextColor(148, 163, 184);
+        doc.text(label, 20, y);
+        doc.setFontSize(10);
+        doc.setTextColor(30, 41, 59);
+        doc.text(String(value || "—"), 75, y);
+        y += 10;
+      };
+
+      field("Full Name:", `${d.first_name} ${d.last_name}`);
+      field("Professional ID:", d.employee_id);
+      field("Primary Contact:", d.mobile_number);
+      field("Email Identity:", d.email);
+      field("Locality:", d.city);
+      field("Employment Type:", d.employment_type);
+      field("Current Status:", (d.status || "").toUpperCase());
+
+      const ph = doc.internal.pageSize.getHeight();
+      doc.setFontSize(8);
+      doc.setTextColor(150);
+      doc.text(opts.footerText || "Professional Credential Record", 20, ph - 15);
+      return doc;
+    },
+    [],
+  );
 
   const renderAvatar = (driver: Driver) => {
     const imgSrc = driver.profile_photo
@@ -334,7 +351,8 @@ const DriverIndexPage = () => {
         alt={driver.first_name}
         className="h-10 w-10 rounded-full object-cover border border-[#f1f5f9] shadow-sm bg-[#ede9fe]"
         onError={(e) => {
-          (e.target as HTMLImageElement).src = `https://ui-avatars.com/api/?name=${driver.first_name}+${driver.last_name}&background=ede9fe&color=7c3aed&bold=true&font-size=0.45`;
+          (e.target as HTMLImageElement).src =
+            `https://ui-avatars.com/api/?name=${driver.first_name}+${driver.last_name}&background=ede9fe&color=7c3aed&bold=true&font-size=0.45`;
         }}
       />
     );
@@ -347,23 +365,29 @@ const DriverIndexPage = () => {
     <div className="min-h-screen font-[var(--font-manrope)]">
       {/* Header Section */}
       <div className="mb-2">
-        <PageHeader 
-          title="Fleet Drivers" 
+        <PageHeader
+          title="Fleet Drivers"
           icon={<IdCard size={18} />}
           breadcrumb="Admin / Fleet Drivers"
-          buttonText="Add Driver" 
-          buttonLink="/drivers/create" 
+          buttonText="Add Driver"
+          buttonLink="/drivers/create"
         >
-             <button onClick={() => setShowBulkExport(true)} className="w-full md:w-auto flex justify-center items-center gap-2 px-5 py-[11px] bg-white text-[#475569] border border-[#e2e8f0] rounded-[10px] text-[12.5px] font-[800] shadow-sm hover:bg-[#f8fafc] hover:border-[#7c3aed] hover:text-[#7c3aed] transition-all duration-200">
-                <Download size={16} />
-                Export PDF
-             </button>
+          <button
+            onClick={() => setShowBulkExport(true)}
+            className="w-full md:w-auto flex justify-center items-center gap-2 px-5 py-[11px] bg-white text-[#475569] border border-[#e2e8f0] rounded-[10px] text-[12.5px] font-[800] shadow-sm hover:bg-[#f8fafc] hover:border-[#7c3aed] hover:text-[#7c3aed] transition-all duration-200"
+          >
+            <Download size={16} />
+            Export PDF
+          </button>
         </PageHeader>
       </div>
 
       {/* Mobile Actions Stack */}
       <div className="lg:hidden flex flex-col gap-3 mb-6 px-4">
-        <button onClick={() => setShowBulkExport(true)} className="btn btn-secondary w-full justify-center">
+        <button
+          onClick={() => setShowBulkExport(true)}
+          className="btn btn-secondary w-full justify-center"
+        >
           <Download size={18} />
           Export Drivers PDF
         </button>
@@ -408,7 +432,6 @@ const DriverIndexPage = () => {
 
       {/* Main Content Card */}
       <div className="bg-white rounded-[18px] border border-[#eef2f6] shadow-[0_2px_12px_rgba(30,41,59,0.03)] overflow-hidden">
-
         {/* Search & Filters */}
         <div className="p-6 border-b border-[#f1f5f9] bg-[#fafbff]/50">
           <div className="flex flex-col lg:flex-row gap-4 items-stretch lg:items-end">
@@ -468,18 +491,15 @@ const DriverIndexPage = () => {
                 ))}
               </select>
             </div>
-
-            </div>
           </div>
+        </div>
 
         {/* Table Content */}
         <div className="relative">
           {loading ? (
             <div className="py-24 flex flex-col items-center gap-4">
               <Loader />
-              <p className="text-[14px] font-[700] text-[#94a3b8]">
-                Loading Driver Records...
-              </p>
+              <p className="text-[14px] font-[700] text-[#94a3b8]">Loading Driver Records...</p>
             </div>
           ) : displayDrivers.length === 0 ? (
             <div className="py-24">
@@ -565,18 +585,13 @@ const DriverIndexPage = () => {
                         {/* Location */}
                         <Td className="py-5">
                           <div className="flex items-start gap-1.5">
-                            <MapPin
-                              size={13}
-                              className="text-[#cbd5e1] mt-0.5 shrink-0"
-                            />
+                            <MapPin size={13} className="text-[#cbd5e1] mt-0.5 shrink-0" />
                             <div>
                               <p className="text-[13px] font-[800] text-[#475569] uppercase">
                                 {row.city || "—"}
                               </p>
                               {row.state && (
-                                <p className="text-[11px] font-[600] text-[#94a3b8]">
-                                  {row.state}
-                                </p>
+                                <p className="text-[11px] font-[600] text-[#94a3b8]">{row.state}</p>
                               )}
                             </div>
                           </div>
@@ -589,9 +604,7 @@ const DriverIndexPage = () => {
                               <span className="text-[13px] font-[900] text-[#475569]">
                                 {row.driving_experience}
                               </span>
-                              <span className="text-[10px] font-[700] text-[#94a3b8]">
-                                yrs
-                              </span>
+                              <span className="text-[10px] font-[700] text-[#94a3b8]">yrs</span>
                             </div>
                           ) : (
                             <span className="text-[#cbd5e1] font-[700]">—</span>
@@ -632,7 +645,7 @@ const DriverIndexPage = () => {
                             </Link>
                             <button
                               onClick={async () => {
-                                if(await confirm("Modify this driver record?")) {
+                                if (await confirm("Modify this driver record?")) {
                                   navigate(`/drivers/edit/${row.id}`);
                                 }
                               }}
@@ -664,13 +677,13 @@ const DriverIndexPage = () => {
               </TableContainer>
 
               <Pagination
-                  currentPage={currentPage}
-                  totalPages={totalPages}
-                  totalItems={totalItems}
-                  onPageChange={setCurrentPage}
-                  itemName="Drivers"
-                  perPage={perPage}
-                />
+                currentPage={currentPage}
+                totalPages={totalPages}
+                totalItems={totalItems}
+                onPageChange={setCurrentPage}
+                itemName="Drivers"
+                perPage={perPage}
+              />
             </div>
           )}
         </div>
@@ -678,8 +691,8 @@ const DriverIndexPage = () => {
 
       <AnimatePresence>
         {showBulkExport && (
-          <ExportOverlay 
-            onClose={() => setShowBulkExport(false)} 
+          <ExportOverlay
+            onClose={() => setShowBulkExport(false)}
             buildPdf={buildBulkPdf}
             title="Export Driver Fleet Registry"
             defaultTitle="Driver Operations Summary"
@@ -688,8 +701,8 @@ const DriverIndexPage = () => {
           />
         )}
         {individualExport && (
-          <ExportOverlay 
-            onClose={() => setIndividualExport(null)} 
+          <ExportOverlay
+            onClose={() => setIndividualExport(null)}
             buildPdf={buildIndividualPdf(individualExport)}
             title={`Export Driver Personnel Profile`}
             defaultTitle={`${individualExport.first_name} ${individualExport.last_name}`}

@@ -44,8 +44,8 @@ const AuthLayout = () => {
   // Listen for the custom event from PageHeader
   useEffect(() => {
     const handleToggle = () => toggleSidebar();
-    document.addEventListener('toggle-sidebar', handleToggle);
-    return () => document.removeEventListener('toggle-sidebar', handleToggle);
+    document.addEventListener("toggle-sidebar", handleToggle);
+    return () => document.removeEventListener("toggle-sidebar", handleToggle);
   }, [isSidebarOpen]);
   return (
     <div className="flex h-screen w-full bg-[#f5f6fa] overflow-hidden font-[var(--font-manrope)]">
@@ -54,13 +54,9 @@ const AuthLayout = () => {
 
       {/* Main Content Area */}
       <main className="flex-1 flex flex-col h-full w-full relative overflow-hidden transition-all duration-300 ease-in-out">
-
-
-
         <div className="flex-1 h-full w-full overflow-y-auto custom-scrollbar">
           <div className="mx-auto w-full max-w-[1600px]">
             <Routes>
-
               <Route path="/" element={<Navigate to="/dashboard" replace />} />
               <Route path="dashboard" element={<DashboardPage />} />
 
@@ -91,8 +87,6 @@ const AuthLayout = () => {
               {/* Device Management */}
               <Route path="devices" element={<DeviceManagementIndexPage />} />
 
-
-
               {/* Compliance Module */}
               <Route path="compliance" element={<ComplianceIndexPage />} />
               <Route path="compliance/create" element={<ComplianceCreatePage />} />
@@ -118,7 +112,6 @@ const AuthLayout = () => {
 
               {/* Feedbacks & Complaints */}
               <Route path="feedbacks" element={<FeedbacksPage />} />
-
             </Routes>
           </div>
         </div>

@@ -75,8 +75,7 @@ const columns = [
   {
     key: "manufacture_date",
     label: "Manufacture Date",
-    render: (item: GpsDevice) =>
-      new Date(item.manufacture_date).toLocaleDateString("en-IN"),
+    render: (item: GpsDevice) => new Date(item.manufacture_date).toLocaleDateString("en-IN"),
   },
   {
     key: "status",
@@ -84,9 +83,7 @@ const columns = [
     render: (item: GpsDevice) => (
       <span
         className={`px-2 py-1 rounded-full text-xs font-semibold ${
-          item.status === "active"
-            ? "bg-green-100 text-green-700"
-            : "bg-red-100 text-red-600"
+          item.status === "active" ? "bg-green-100 text-green-700" : "bg-red-100 text-red-600"
         }`}
       >
         {item.status}
@@ -96,8 +93,7 @@ const columns = [
 ];
 
 const GpsIndexPage = () => {
-  const [filteredGps, setFilteredGps] =
-    useState<GpsDevice[]>(dummyGpsDevices);
+  const [filteredGps, setFilteredGps] = useState<GpsDevice[]>(dummyGpsDevices);
 
   const handleSearch = useCallback((query: string) => {
     if (!query) {
@@ -111,18 +107,14 @@ const GpsIndexPage = () => {
         gps.imei_number.toLowerCase().includes(q) ||
         gps.serial_number.toLowerCase().includes(q) ||
         gps.sequnce_number.toLowerCase().includes(q) ||
-        gps.status.toLowerCase().includes(q)
+        gps.status.toLowerCase().includes(q),
     );
     setFilteredGps(filtered);
   }, []);
 
   return (
     <div className="px-4 bg-white min-h-screen">
-      <PageHeader
-        title="GPS Devices"
-        icon="gps_fixed"
-        breadcrumb="Dashboard / GPS Devices"
-      />
+      <PageHeader title="GPS Devices" icon="gps_fixed" breadcrumb="Dashboard / GPS Devices" />
 
       <div className="my-4">
         <SearchComponent
@@ -131,11 +123,7 @@ const GpsIndexPage = () => {
         />
       </div>
 
-      <Table<GpsDevice>
-        list={filteredGps}
-        columns={columns}
-        editUrl="/gps/edit"
-      />
+      <Table<GpsDevice> list={filteredGps} columns={columns} editUrl="/gps/edit" />
     </div>
   );
 };
