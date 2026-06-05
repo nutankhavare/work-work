@@ -248,7 +248,7 @@ const LoginFormScreen = ({ onForgot, onOtpLogin }: { onForgot: () => void; onOtp
   const [form, setForm] = useState<LoginForm>({ email: "", password: "", remember: false });
   const [showPw, setShowPw] = useState(false);
   const [focus, setFocus] = useState<"e" | "p" | null>(null);
-  const [errs, setErrs] = useState<{ email?: string; password?: string }>({});
+  const [errs, setErrs] = useState<{ email?: string; password?: string; general?: string }>({});
   const [loading, setLoading] = useState(false);
   
   const navigate = useNavigate();
@@ -257,7 +257,7 @@ const LoginFormScreen = ({ onForgot, onOtpLogin }: { onForgot: () => void; onOtp
   const handle = (f: keyof LoginForm) => (e: ChangeEvent<HTMLInputElement>) => {
     const v = e.target.type === "checkbox" ? e.target.checked : e.target.value;
     setForm((p) => ({ ...p, [f]: v }));
-    setErrs((p) => ({ ...p, [f]: "" }));
+    setErrs((p) => ({ ...p, [f]: "", general: "" }));
   };
 
   const validate = () => {
@@ -287,7 +287,7 @@ const LoginFormScreen = ({ onForgot, onOtpLogin }: { onForgot: () => void; onOtp
       });
       navigate("/dashboard");
     } catch (err: any) {
-      setErrs((p) => ({ ...p, password: err.response?.data?.error?.message || err.response?.data?.message || "Invalid credentials. Please try again." }));
+      setErrs((p) => ({ ...p, general: err.response?.data?.error?.message || err.response?.data?.message || "Invalid credentials. Please verify your email and password." }));
     } finally {
       setLoading(false);
     }
@@ -304,6 +304,21 @@ const LoginFormScreen = ({ onForgot, onOtpLogin }: { onForgot: () => void; onOtp
       </div>
 
       <form onSubmit={submit} noValidate style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+        {errs.general && (
+          <div style={{
+            display: "flex", alignItems: "center", gap: 10,
+            padding: "12px 16px", background: "#fef2f2", border: "1px solid #fee2e2",
+            borderRadius: 10, margin: "0 0 4px",
+          }}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#ef4444" strokeWidth="2.5" style={{ flexShrink: 0 }}>
+              <circle cx="12" cy="12" r="10" />
+              <line x1="12" y1="8" x2="12" y2="12" />
+              <line x1="12" y1="16" x2="12.01" y2="16" />
+            </svg>
+            <span style={{ fontSize: 12.5, color: "#991b1b", fontWeight: 700, ...fw }}>{errs.general}</span>
+          </div>
+        )}
+
         {/* Email */}
         <div>
           <Lbl>Email Address</Lbl>

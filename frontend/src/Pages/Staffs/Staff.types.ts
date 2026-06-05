@@ -53,6 +53,8 @@ export interface Employee {
   remarks: string;
 
   roles: string[];
+  beacon_id?: string;
+  department?: string;
   user?: {
         roles: Array<{
             name: string;

@@ -19,7 +19,8 @@ import {
   Mail,
   Hash,
   AlertCircle,
-  Heart
+  Heart,
+  Cpu
 } from "lucide-react";
 
 // Components
@@ -29,7 +30,7 @@ import tenantApi, { tenantAsset } from "../../Services/ApiService";
 import type { Employee } from "./Staff.types";
 import { DUMMY_USER_IMAGE, formatDate } from "../../Utils/Toolkit";
 import EmptyState from "../../Components/UI/EmptyState";
-import { useAlert } from "../../Context/AlertContext";
+// import { useAlert } from "../../Context/AlertContext";
 import ExportOverlay from "../../Components/UI/ExportOverlay";
 
 /* ── Section Card ── */
@@ -61,13 +62,13 @@ const Field = ({ label, value }: { label: string; value?: string | null }) => (
   </div>
 );
 
-type TabKey = "details" | "dependants" | "documents";
+type TabKey = "details" | "dependants" | "documents" | "beacon";
 
 // --- Main Component ---
 const StaffShowPage = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  const { showAlert } = useAlert();
+  // const { showAlert } = useAlert();
 
   const [staff, setStaff] = useState<Employee | null>(null);
   const [loading, setLoading] = useState(true);
@@ -160,11 +161,11 @@ const StaffShowPage = () => {
       </div>
     );
 
-  /* ─── Tabs Config ─── */
   const tabs: { key: TabKey; label: string; icon: any }[] = [
     { key: "details", label: "Details", icon: User },
     { key: "dependants", label: "Dependants & Emergency", icon: Users },
     { key: "documents", label: "Documents", icon: FileText },
+    { key: "beacon", label: "Beacon Assigned", icon: Cpu },
   ];
 
   return (
@@ -422,6 +423,52 @@ const StaffShowPage = () => {
                   <div className="py-16 text-center">
                     <FileText size={48} className="text-[#e2e8f0] mx-auto mb-4" strokeWidth={1.5} />
                     <p className="text-[12px] font-[800] text-[#cbd5e1] uppercase">No documents attached</p>
+                  </div>
+                )}
+              </SectionCard>
+            )}
+
+            {/* TAB 4 — BEACON ASSIGNED */}
+            {activeTab === "beacon" && (
+              <SectionCard icon={Cpu} title="Beacon Hardware Binding" colorClass="bg-[#fafbff] text-[#10b981]">
+                {staff.beacon_id ? (
+                  <div className="max-w-md mx-auto p-6 bg-white rounded-2xl border border-[#e2e8f0] shadow-sm flex flex-col items-center text-center">
+                    <div className="w-16 h-16 bg-[#ecfdf5] text-[#10b981] rounded-full flex items-center justify-center mb-4 relative">
+                      <Cpu size={32} />
+                      <span className="absolute top-0 right-0 flex h-3.5 w-3.5">
+                        <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#10b981] opacity-75"></span>
+                        <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#10b981]"></span>
+                      </span>
+                    </div>
+                    <h4 className="text-[16px] font-[900] text-[#1e293b] mb-1 uppercase tracking-tight">Active Beacon Linked</h4>
+                    <p className="text-[12px] text-[#64748b] mb-6">This staff member is currently assigned to a physical tracking device.</p>
+                    
+                    <div className="w-full bg-[#fafbff] rounded-xl border border-[#f1f5f9] p-4 text-left space-y-3">
+                      <div>
+                        <span className="text-[9px] font-[900] text-[#94a3b8] uppercase tracking-wider block mb-0.5">Device ID / Serial</span>
+                        <span className="text-[13.5px] font-[800] text-[#1e293b]">{staff.beacon_id}</span>
+                      </div>
+                      <div>
+                        <span className="text-[9px] font-[900] text-[#94a3b8] uppercase tracking-wider block mb-0.5">Hardware Status</span>
+                        <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-[800] bg-[#ecfdf5] text-[#059669] border border-[#d1fae5] uppercase tracking-wide">
+                          ONLINE & TRANSMITTING
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="py-16 text-center max-w-sm mx-auto">
+                    <div className="w-16 h-16 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mx-auto mb-4">
+                      <Cpu size={32} />
+                    </div>
+                    <h3 className="text-[15px] font-[900] text-[#1e293b] mb-1">No Beacon Assigned</h3>
+                    <p className="text-[12.5px] text-[#94a3b8] mb-6">This staff member does not have any physical beacon linked to them yet.</p>
+                    <button
+                      onClick={() => navigate(`/staff/edit/${id}`)}
+                      className="btn btn-primary justify-center w-full"
+                    >
+                      Assign Beacon Device
+                    </button>
                   </div>
                 )}
               </SectionCard>

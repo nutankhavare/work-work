@@ -76,12 +76,11 @@ tenantApi.interceptors.response.use(
       window.location.pathname !== "/login" &&
       !isRedirecting
     ) {
-      console.warn("Unauthorized access! Bypass login is active, ignoring redirect.");
+      console.warn("Unauthorized access! Redirecting to login.");
       // isRedirecting = true;
-      // localStorage.removeItem("token");
-      // localStorage.removeItem("auth_state");
-      // window.location.href = "/login";
-      // setTimeout(() => { isRedirecting = false; }, 3000);
+      localStorage.removeItem("token");
+      localStorage.removeItem("auth_state");
+      window.location.href = "/login";
     }
     return Promise.reject(error);
   },

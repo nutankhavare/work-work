@@ -1,7 +1,7 @@
 import { motion } from "framer-motion";
 import { useState, useEffect } from "react";
 import { Toggle } from "../../Components/UI/Toggle";
-import { useAuth } from "../../Context/AuthContext";
+// import { useAuth } from "../../Context/AuthContext";
 import tenantApi from "../../Services/ApiService";
 import PageHeader from "../../Components/UI/PageHeader";
 
@@ -219,7 +219,7 @@ const CardHeader = ({
 );
 
 export const SettingsPage = () => {
-  const { user } = useAuth();
+  // const { user } = useAuth();
   const [org, setOrg] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);

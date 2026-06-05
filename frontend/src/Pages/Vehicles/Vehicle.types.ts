@@ -72,7 +72,6 @@ export interface Vehicle {
     vendor_contract_proof?: string;
     vedor_company_registration_doc?: string;
     // NEW FIELDS
-    kilometers_driven?: number;
     gps_sim_number?: string;
     beacon_count?: number;
     assigned_driver_id?: string;
@@ -80,16 +79,12 @@ export interface Vehicle {
     owner_name?: string;
     owner_contact_number?: string;
     organisation_fleet_name?: string;
-    fitness_certificate_number?: string;
-    pollution_certificate_number?: string;
-    last_service_date?: string;
-    next_service_due_date?: string;
-    tyre_replacement_due_date?: string;
-    battery_replacement_due_date?: string;
-    fire_extinguisher?: string;
-    first_aid_kit?: string;
-    cctv_installed?: string;
-    panic_button_installed?: string;
     owner_id_proof?: string;
     vendor_agreement?: string;
+    created_at?: string;
+    updated_at?: string;
+    driver_first_name?: string;
+    driver_last_name?: string;
+    driver_mobile_number?: string;
+    driver_employee_id?: string;
 }

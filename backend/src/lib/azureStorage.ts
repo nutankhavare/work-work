@@ -1,11 +1,13 @@
 import { BlobServiceClient } from "@azure/storage-blob";
 import "dotenv/config";
+import fs from "fs";
+import path from "path";
 
 const connectionString = process.env.AZURE_STORAGE_CONNECTION_STRING || "";
 const containerName = process.env.AZURE_STORAGE_CONTAINER_NAME || "uploads";
 
 if (!connectionString) {
-  console.warn("AZURE_STORAGE_CONNECTION_STRING is not set. Azure Storage will not work.");
+  console.warn("AZURE_STORAGE_CONNECTION_STRING is not set. Falling back to local disk storage.");
 }
 
 let blobServiceClient: any;
@@ -47,7 +49,19 @@ export async function uploadToAzure(
   mimeType: string
 ): Promise<string> {
   if (!connectionString) {
-    throw new Error("Azure Storage Connection String is missing");
+    const sanitized = originalName
+      .replace(/\s+/g, "_")
+      .replace(/[^a-zA-Z0-9.\-_]/g, "");
+    
+    const filename = `${Date.now()}-${sanitized}`;
+    const uploadsDir = path.join(__dirname, "..", "..", "uploads");
+    
+    if (!fs.existsSync(uploadsDir)) {
+      fs.mkdirSync(uploadsDir, { recursive: true });
+    }
+    
+    fs.writeFileSync(path.join(uploadsDir, filename), buffer);
+    return `http://localhost:4000/uploads/${filename}`;
   }
 
   // Stricter sanitization: remove non-alphanumeric chars (except . - _)

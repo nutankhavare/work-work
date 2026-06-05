@@ -113,18 +113,21 @@ const DriverCreatePage = () => {
       setDistricts(d);
     }).catch(() => {});;
   }, [selectedState]);
-
   useEffect(() => {
     const pinStr = String(pinCode || "").trim();
     if (pinStr.length === 6) {
-      axios.get(`https://api.postalpincode.in/pincode/${pinStr}`).then(res => {
-        if (res.data?.[0]?.Status === "Success") {
-          const po = res.data[0].PostOffice[0];
-          setValue("city", po.Block || po.District, { shouldValidate: true });
-          const matchState = dropdowns.states.find(s => s.state.toLowerCase() === po.State.toLowerCase())?.state || po.State;
-          setValue("state", matchState, { shouldValidate: true });
-        }
-      }).catch(() => {});
+      axios.get(`https://api.postalpincode.in/pincode/${pinStr}`)
+        .then(res => {
+          if (res.data?.[0]?.Status === "Success") {
+            const po = res.data[0].PostOffice[0];
+            setValue("city", po.Block || po.District, { shouldValidate: true });
+            const matchState = dropdowns.states.find(s => s.state.toLowerCase() === po.State.toLowerCase())?.state || po.State;
+            setValue("state", matchState, { shouldValidate: true });
+          }
+        })
+        .catch(err => {
+          console.warn("Postal Pin Code API failed (possibly due to SSL/certificate issues). Gracefully degrading to manual entry.", err);
+        });
     }
   }, [pinCode, dropdowns.states, setValue]);
 
@@ -405,8 +408,8 @@ const DriverCreatePage = () => {
 
           <FormSection title="Permits & Licenses" icon="id_card">
              <div className="space-y-4">
-                {fields.map((index: any) => (
-                   <div key={index} className="grid grid-cols-1 md:grid-cols-5 gap-3 p-4 bg-[#fafbff] rounded-[10px] border border-[#f1f5f9] relative">
+                {fields.map((field, index) => (
+                   <div key={field.id} className="grid grid-cols-1 md:grid-cols-5 gap-3 p-4 bg-[#fafbff] rounded-[10px] border border-[#f1f5f9] relative">
                       <div className="md:col-span-1">
                         <label className="form-label flex items-center gap-1.5">
                           <span className="material-symbols-outlined text-[14px]">category</span>

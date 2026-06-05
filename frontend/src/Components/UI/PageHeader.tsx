@@ -21,7 +21,6 @@ const PageHeader: React.FC<HeaderProps> = ({
   buttonLink = "",
   showBackButton = false,
   backButtonLink = "/dashboard",
-  planName,
   children,
 }) => {
   const navigate = useNavigate();

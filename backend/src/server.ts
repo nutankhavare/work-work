@@ -7,10 +7,13 @@ import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import multer, { MulterError } from "multer";
 import pool from "./lib/db";
+import type { PoolClient } from "pg";
 import { uploadToAzure } from "./lib/azureStorage";
 import { sendEmail } from "./lib/messaging";
+import { join } from "path";
 
 const app = express();
+app.use("/uploads", express.static(join(__dirname, "..", "uploads")));
 const PORT = Number(process.env.PORT || 4000);
 const JWT_SECRET = process.env.JWT_SECRET || "dummy-secret-for-now";
 const DUMMY_ORG_ID = "00000000-0000-0000-0000-000000000001";
@@ -99,6 +102,22 @@ function getOrgIdFromRequest(req: Request): string | null {
   }
 }
 
+function generateUniqueLocation(baseLoc?: any): { lat: number; lng: number; speed: number } {
+  let lat = 12.9716;
+  let lng = 77.5946;
+  if (baseLoc && typeof baseLoc === "object") {
+    lat = parseFloat(baseLoc.lat) || lat;
+    lng = parseFloat(baseLoc.lng) || lng;
+  }
+  const latJitter = (Math.random() - 0.5) * 0.04;
+  const lngJitter = (Math.random() - 0.5) * 0.04;
+  return {
+    lat: Number((lat + latJitter).toFixed(6)),
+    lng: Number((lng + lngJitter).toFixed(6)),
+    speed: Math.floor(Math.random() * 30) + 15
+  };
+}
+
 function getPagination(req: Request) {
   const page = Math.max(Number(req.query.page ?? 1) || 1, 1);
   const perPage = Math.min(Math.max(Number(req.query.per_page ?? 10) || 10, 1), 100);
@@ -128,8 +147,10 @@ async function fetchRowsWithOrgFallback(table: string, orgId: any) {
   
   if (columns.has("org_id") && orgId) {
     // Strict isolation: only show records for THIS organization
-    const result = await pool.query(`SELECT * FROM ${table} WHERE org_id = $1 ORDER BY id DESC`, [String(orgId)]);
-    return result.rows;
+    return await withTransaction(`SELECT ${table}`, orgId, async (client) => {
+      const result = await client.query(`SELECT * FROM ${table} WHERE org_id = $1 ORDER BY id DESC`, [String(orgId)]);
+      return result.rows;
+    });
   }
 
   // If table has no org_id, show everything (global tables)
@@ -167,6 +188,21 @@ function normalizeVehicleRow(row: any) {
     model: row.model || row.vehicle_model || "",
     capacity: row.capacity ?? row.seating_capacity ?? null,
     lastGpsUpdate: row.lastGpsUpdate || row.last_gps_update || null,
+  };
+}
+
+function getOrGenerateLocation(deviceLocation: any) {
+  if (deviceLocation && typeof deviceLocation === "object" && deviceLocation.lat && deviceLocation.lng) {
+    return deviceLocation;
+  }
+  const latCenter = 15.8497;
+  const lngCenter = 74.4977;
+  const randomLat = latCenter + (Math.random() - 0.5) * 0.08;
+  const randomLng = lngCenter + (Math.random() - 0.5) * 0.08;
+  return {
+    lat: Number(randomLat.toFixed(6)),
+    lng: Number(randomLng.toFixed(6)),
+    speed: 0
   };
 }
 
@@ -303,7 +339,8 @@ function toEmployeePayload(body: Record<string, unknown>, allowed: Set<string>) 
     "bank_proof",
     "status",
     "remarks",
-    "roles"
+    "roles",
+    "beacon_id"
   ];
 
   for (const key of keys) {
@@ -388,6 +425,46 @@ const generateSetClause = (payload: Record<string, any>, startIdx = 1) => {
     .join(", ");
 };
 
+async function withTransaction<T>(
+  routeName: string,
+  orgId: string | null | undefined,
+  callback: (client: PoolClient) => Promise<T>
+): Promise<T> {
+  if (!orgId) {
+    throw new Error("Missing orgId for RLS transaction");
+  }
+
+  const client = await (pool as any).connect() as PoolClient;
+  try {
+    console.log(`[TX START] Route: ${routeName}, Org: ${orgId}`);
+    await client.query("BEGIN");
+    
+    try {
+      await client.query(`SELECT set_config('app.current_org_id', $1, true)`, [orgId]);
+      console.log(`[RLS APPLIED] Route: ${routeName}, Org: ${orgId}`);
+    } catch (rlsError: any) {
+      console.error(`[RLS FAILED] Route: ${routeName}, Org: ${orgId}, Error: ${rlsError.message}`);
+      throw rlsError;
+    }
+
+    const result = await callback(client);
+    
+    await client.query("COMMIT");
+    console.log(`[TX COMMIT] Route: ${routeName}, Org: ${orgId}`);
+    return result;
+  } catch (err: any) {
+    console.error(`[TX ROLLBACK] Route: ${routeName}, Org: ${orgId}, Error: ${err.message}`);
+    try {
+      await client.query("ROLLBACK");
+    } catch (rollbackErr: any) {
+      console.error(`[ROLLBACK FAILED] Route: ${routeName}, Org: ${orgId}, Error: ${rollbackErr.message}`);
+    }
+    throw err;
+  } finally {
+    client.release();
+  }
+}
+
 app.get("/health", async (_req: Request, res: Response) => {
   try {
     const conn = await pool.connect();
@@ -465,15 +542,20 @@ app.post("/api/auth/login", async (req: Request, res: Response) => {
       { expiresIn: "24h" }
     );
 
-    // Fetch organization details
+    // Fetch organization details & validate type
     let organization = null;
     if (user.org_id) {
       const orgRes = await client.query(
-        "SELECT id, name, email, phone, website, status FROM organizations WHERE id::text = $1 LIMIT 1",
+        "SELECT id, name, type, email, phone, website, status FROM organizations WHERE id::text = $1 LIMIT 1",
         [String(user.org_id)]
       );
       if (orgRes.rows.length > 0) {
         organization = orgRes.rows[0];
+        if (organization.type !== "institute") {
+          console.log(`[AUTH] Login blocked: Org ID ${user.org_id} has type '${organization.type}' which is not 'institute'`);
+          res.status(403).json({ success: false, message: "Access denied: This portal is only accessible to Institute organizations." });
+          return;
+        }
       }
     }
 
@@ -506,17 +588,22 @@ app.post("/api/auth/login", async (req: Request, res: Response) => {
 });
 
 app.get("/api/auth/refresh", async (req: Request, res: Response) => {
-  const orgId = getOrgIdFromRequest(req);
-  if (!orgId) {
+  const auth = req.headers.authorization;
+  if (!auth || !auth.startsWith("Bearer ")) {
     res.status(401).json({ message: "Unauthorized" });
     return;
   }
 
   const client = await pool.connect();
   try {
-    const auth = req.headers.authorization;
-    const token = auth!.slice(7);
-    const decoded = jwt.verify(token, JWT_SECRET) as any;
+    const token = auth.slice(7);
+    const decoded = jwt.verify(token, JWT_SECRET, { ignoreExpiration: true }) as any;
+    const orgId = decoded.org_id || decoded.tenant_id;
+
+    if (!orgId) {
+      res.status(401).json({ message: "Unauthorized: Missing org_id" });
+      return;
+    }
 
     const { rows } = await client.query("SELECT * FROM users WHERE id = $1 LIMIT 1", [decoded.id || decoded.sub]);
     const user = rows[0];
@@ -529,21 +616,44 @@ app.get("/api/auth/refresh", async (req: Request, res: Response) => {
     const roleLower = (user.role ?? "").toLowerCase();
     const isOwner = roleLower.includes("admin") || roleLower.includes("owner") || roleLower === "super_admin";
 
-    // Fetch organization details
+    // Fetch organization details & validate type
     let organization = null;
     if (user.org_id) {
       const orgRes = await client.query(
-        "SELECT id, name, email, phone, website, status FROM organizations WHERE id::text = $1 LIMIT 1",
+        "SELECT id, name, type, email, phone, website, status FROM organizations WHERE id::text = $1 LIMIT 1",
         [String(user.org_id)]
       );
       if (orgRes.rows.length > 0) {
         organization = orgRes.rows[0];
+        if (organization.type !== "institute") {
+          res.status(403).json({ message: "Access denied: This portal is only accessible to Institute organizations." });
+          return;
+        }
       }
     }
+
+    // Generate a fresh token
+    const freshToken = jwt.sign(
+      {
+        sub: String(user.id),
+        id: String(user.id),
+        email: user.email,
+        org_id: user.org_id,
+        role: user.role,
+        role_name: user.role,
+        permissions: isOwner ? ["*"] : [],
+        access_level: isOwner ? "Root Access" : "Partial Access",
+        is_owner: isOwner,
+        tenant_id: user.org_id,
+      },
+      JWT_SECRET,
+      { expiresIn: "24h" }
+    );
 
     res.json({
       success: true,
       data: {
+        token: freshToken,
         id: user.id,
         name: user.role || "Administrator",
         email: user.email,
@@ -565,6 +675,32 @@ app.get("/api/auth/refresh", async (req: Request, res: Response) => {
 });
 
 // Employees
+app.get("/api/staff/by-vehicle/:vehicleId", async (req: Request, res: Response) => {
+  const orgId = getOrgIdFromRequest(req);
+  if (!orgId) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+  const vehicleId = Number(req.params.vehicleId);
+  if (!Number.isFinite(vehicleId)) {
+    res.status(400).json({ success: false, message: "Invalid vehicle ID" });
+    return;
+  }
+  
+  try {
+    const result = await pool.query(
+      `SELECT id, first_name, last_name, employee_id, phone, gender, beacon_id
+       FROM institute.institute_employees 
+       WHERE org_id = $1 AND assigned_vehicle_id = $2`, 
+      [String(orgId), vehicleId]
+    );
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error("Fetch staff by vehicle error:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch assigned staff" });
+  }
+});
+
 app.get("/api/employees", async (req: Request, res: Response) => {
   const orgId = getOrgIdFromRequest(req);
   if (!orgId) {
@@ -613,29 +749,35 @@ app.get("/api/employees/:id", async (req: Request, res: Response) => {
   }
 
   try {
-    const employeeResult = await pool.query(
-      `SELECT * FROM ${EMPLOYEE_TABLE} WHERE org_id = $1 AND id = $2 LIMIT 1`,
-      [orgId, id]
-    );
+    const employee = await withTransaction("GET /api/employees/:id", orgId, async (client) => {
+      const employeeResult = await client.query(
+        `SELECT * FROM ${EMPLOYEE_TABLE} WHERE org_id = $1 AND id = $2 LIMIT 1`,
+        [orgId, id]
+      );
 
-    if (!employeeResult.rows.length) {
-      res.status(404).json({ success: false, message: "Employee not found" });
-      return;
-    }
+      if (!employeeResult.rows.length) {
+        throw new Error("Employee not found");
+      }
 
-    const employee = employeeResult.rows[0];
+      const emp = employeeResult.rows[0];
 
-    // Fetch dependants
-    const dependantsResult = await pool.query(
-      `SELECT * FROM institute.institute_employee_dependants WHERE employee_id = $1`,
-      [id]
-    );
-    employee.dependants = dependantsResult.rows;
+      // Fetch dependants
+      const dependantsResult = await client.query(
+        `SELECT * FROM institute.institute_employee_dependants WHERE employee_id = $1`,
+        [id]
+      );
+      emp.dependants = dependantsResult.rows;
+      return emp;
+    });
 
     res.json({ success: true, data: employee });
-  } catch (err) {
+  } catch (err: any) {
     console.error("Fetch employee detail error:", err);
-    res.status(500).json({ success: false, message: "Failed to fetch employee" });
+    if (err.message === "Employee not found") {
+      res.status(404).json({ success: false, message: "Employee not found" });
+    } else {
+      res.status(500).json({ success: false, message: "Failed to fetch employee" });
+    }
   }
 });
 
@@ -646,56 +788,84 @@ app.post("/api/employees", upload.any(), async (req: Request, res: Response) => 
     return;
   }
 
-  const client = await pool.connect();
   try {
-    await client.query("BEGIN");
-    const columns = await getTableColumns(EMPLOYEE_TABLE);
-    
-    // 1. Prepare Payload
-    const payload = toEmployeePayload(req.body as Record<string, unknown>, columns);
-    payload.org_id = orgId;
+    const newEmployee = await withTransaction("POST /api/employees", orgId, async (client) => {
+      const columns = await getTableColumns(EMPLOYEE_TABLE);
+      
+      // 1. Prepare Payload
+      const payload = toEmployeePayload(req.body as Record<string, unknown>, columns);
+      payload.org_id = orgId;
 
-    // Handle files (Azure Blob Storage)
-    await processFiles(req.files, columns, payload);
+      // Handle files (Azure Blob Storage)
+      await processFiles(req.files, columns, payload);
 
-    // 2. Insert Employee
-    const insertColumns = Object.keys(payload);
-    const placeholders = insertColumns.map((_, idx) => `$${idx + 1}`).join(", ");
-    const values = insertColumns.map(k => payload[k]);
+      // 2. Insert Employee
+      const insertColumns = Object.keys(payload);
+      const placeholders = insertColumns.map((_, idx) => `$${idx + 1}`).join(", ");
+      const values = insertColumns.map(k => payload[k]);
 
-    const result = await client.query(
-      `INSERT INTO ${EMPLOYEE_TABLE} (${insertColumns.join(", ")}) VALUES (${placeholders}) RETURNING *`,
-      values
-    );
-    const newEmployee = result.rows[0];
+      const result = await client.query(
+        `INSERT INTO ${EMPLOYEE_TABLE} (${insertColumns.join(", ")}) VALUES (${placeholders}) RETURNING *`,
+        values
+      );
+      const inserted = result.rows[0];
 
-    // 3. Handle Dependants
-    if (req.body.dependants) {
-      try {
-        const dependants = JSON.parse(String(req.body.dependants));
-        if (Array.isArray(dependants)) {
-          for (const dep of dependants) {
-            if (!dep.fullname) continue;
-            await client.query(
-              `INSERT INTO institute.institute_employee_dependants (employee_id, fullname, relation, age, phone, email)
-               VALUES ($1, $2, $3, $4, $5, $6)`,
-              [newEmployee.id, dep.fullname, dep.relation, dep.age, dep.phone, dep.email]
-            );
+      // 3. Handle Dependants
+      if (req.body.dependants) {
+        try {
+          const dependants = JSON.parse(String(req.body.dependants));
+          if (Array.isArray(dependants)) {
+            for (const dep of dependants) {
+              if (!dep.fullname) continue;
+              await client.query(
+                `INSERT INTO institute.institute_employee_dependants (employee_id, fullname, relation, age, phone, email)
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [inserted.id, dep.fullname, dep.relation, dep.age, dep.phone, dep.email]
+              );
+            }
           }
+        } catch (e) {
+          console.error("Failed to parse dependants JSON:", e);
         }
-      } catch (e) {
-        console.error("Failed to parse dependants JSON:", e);
       }
-    }
 
-    await client.query("COMMIT");
+      // 4. Track Beacon assignment in institute table
+      if (inserted.beacon_id) {
+        const devCheck = await client.query(
+          `SELECT * FROM devices.beacons WHERE device_id = $1 AND org_id = $2 LIMIT 1`,
+          [inserted.beacon_id, Number(orgId)]
+        );
+        if (devCheck.rows.length) {
+          const deviceData = devCheck.rows[0];
+          await client.query(
+            `INSERT INTO institute.institute_beacon (
+              id, device_id, sequence_id, allocated_to_org, status, device_type,
+              manufactured_at, manufactured_by, warranty_years, warranty_expiry,
+              battery_level, battery_status, battery_type, expected_battery_life_days,
+              device_health, is_active, created_at, assigned_to, assigned_type, synced_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW())
+            ON CONFLICT (id) DO UPDATE SET
+              assigned_to = EXCLUDED.assigned_to,
+              assigned_type = EXCLUDED.assigned_type,
+              synced_at = NOW()`,
+            [
+              deviceData.id, deviceData.device_id, deviceData.sequence_id, Number(orgId), deviceData.status, deviceData.device_type,
+              deviceData.manufactured_at, deviceData.manufactured_by, deviceData.warranty_years, deviceData.warranty_expiry,
+              deviceData.battery_level, deviceData.battery_status, deviceData.battery_type, deviceData.expected_battery_life_days,
+              deviceData.device_health, deviceData.is_active, deviceData.created_at, String(inserted.id), "staff"
+            ]
+          );
+        }
+      }
+
+      return inserted;
+    });
+
     res.status(201).json({ success: true, data: newEmployee, message: "Staff created successfully" });
   } catch (err: any) {
-    await client.query("ROLLBACK");
     console.error("Create employee error:", err);
+    console.error(err); // Temporary raw stack trace log
     res.status(500).json({ success: false, message: err.message || "Failed to create staff" });
-  } finally {
-    client.release();
   }
 });
 
@@ -707,64 +877,105 @@ app.put("/api/employees/:id", upload.any(), async (req: Request, res: Response) 
   }
 
   const id = Number(req.params.id);
-  const client = await pool.connect();
+  if (isNaN(id)) {
+    res.status(400).json({ success: false, message: "Invalid ID" });
+    return;
+  }
+
   try {
-    await client.query("BEGIN");
-    const columns = await getTableColumns(EMPLOYEE_TABLE);
-    
-    // 1. Prepare Payload
-    const payload = toEmployeePayload(req.body as Record<string, unknown>, columns);
-    payload.updated_at = new Date().toISOString();
-
-    // Handle files (Azure Blob Storage)
-    await processFiles(req.files, columns, payload);
-
-    // 2. Update Employee
-    const updates = Object.keys(payload);
-    if (updates.length > 0) {
-      const setClause = updates.map((key, idx) => `${key} = $${idx + 1}`).join(", ");
-      const values = updates.map(k => payload[k]);
+    await withTransaction("PUT /api/employees/:id", orgId, async (client) => {
+      const columns = await getTableColumns(EMPLOYEE_TABLE);
       
-      const result = await client.query(
-        `UPDATE ${EMPLOYEE_TABLE} SET ${setClause} WHERE id = $${updates.length + 1} AND org_id = $${updates.length + 2} RETURNING *`,
-        [...values, id, orgId]
-      );
+      // 1. Prepare Payload
+      const payload = toEmployeePayload(req.body as Record<string, unknown>, columns);
+      payload.updated_at = new Date().toISOString();
 
-      if (!result.rows.length) {
-        await client.query("ROLLBACK");
-        res.status(404).json({ success: false, message: "Staff not found" });
-        return;
-      }
-    }
+      // Handle files (Azure Blob Storage)
+      await processFiles(req.files, columns, payload);
 
-    // 3. Sync Dependants
-    if (req.body.dependants) {
-      try {
-        const dependants = JSON.parse(String(req.body.dependants));
-        if (Array.isArray(dependants)) {
-          await client.query(`DELETE FROM institute.institute_employee_dependants WHERE employee_id = $1`, [id]);
-          for (const dep of dependants) {
-            if (!dep.fullname) continue;
-            await client.query(
-              `INSERT INTO institute.institute_employee_dependants (employee_id, fullname, relation, age, phone, email)
-               VALUES ($1, $2, $3, $4, $5, $6)`,
-              [id, dep.fullname, dep.relation, dep.age, dep.phone, dep.email]
-            );
-          }
+      // 2. Update Employee
+      const updates = Object.keys(payload);
+      if (updates.length > 0) {
+        const setClause = updates.map((key, idx) => `${key} = $${idx + 1}`).join(", ");
+        const values = updates.map(k => payload[k]);
+        
+        const result = await client.query(
+          `UPDATE ${EMPLOYEE_TABLE} SET ${setClause} WHERE id = $${updates.length + 1} AND org_id = $${updates.length + 2} RETURNING *`,
+          [...values, id, orgId]
+        );
+
+        if (!result.rows.length) {
+          throw new Error("Staff not found");
         }
-      } catch (e) {
-        console.error("Failed to parse dependants JSON:", e);
       }
-    }
 
-    await client.query("COMMIT");
+      // 3. Sync Dependants
+      if (req.body.dependants) {
+        try {
+          const dependants = JSON.parse(String(req.body.dependants));
+          if (Array.isArray(dependants)) {
+            await client.query(`DELETE FROM institute.institute_employee_dependants WHERE employee_id = $1`, [id]);
+            for (const dep of dependants) {
+              if (!dep.fullname) continue;
+              await client.query(
+                `INSERT INTO institute.institute_employee_dependants (employee_id, fullname, relation, age, phone, email)
+                 VALUES ($1, $2, $3, $4, $5, $6)`,
+                [id, dep.fullname, dep.relation, dep.age, dep.phone, dep.email]
+              );
+            }
+          }
+        } catch (e) {
+          console.error("Failed to parse dependants JSON:", e);
+        }
+      }
+
+      // 4. Track Beacon assignment in institute table
+      // Clear any old beacon assignment for this employee by deleting the row
+      await client.query(
+        `DELETE FROM institute.institute_beacon
+         WHERE assigned_to = $1 AND assigned_type = 'staff' AND allocated_to_org = $2`,
+        [String(id), Number(orgId)]
+      );
+      // Set new beacon assignment if provided
+      const beaconId = req.body.beacon_id ? String(req.body.beacon_id).trim() : null;
+      if (beaconId) {
+        const devCheck = await client.query(
+          `SELECT * FROM devices.beacons WHERE device_id = $1 AND org_id = $2 LIMIT 1`,
+          [beaconId, Number(orgId)]
+        );
+        if (devCheck.rows.length) {
+          const deviceData = devCheck.rows[0];
+          await client.query(
+            `INSERT INTO institute.institute_beacon (
+              id, device_id, sequence_id, allocated_to_org, status, device_type,
+              manufactured_at, manufactured_by, warranty_years, warranty_expiry,
+              battery_level, battery_status, battery_type, expected_battery_life_days,
+              device_health, is_active, created_at, assigned_to, assigned_type, synced_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW())
+            ON CONFLICT (id) DO UPDATE SET
+              assigned_to = EXCLUDED.assigned_to,
+              assigned_type = EXCLUDED.assigned_type,
+              synced_at = NOW()`,
+            [
+              deviceData.id, deviceData.device_id, deviceData.sequence_id, Number(orgId), deviceData.status, deviceData.device_type,
+              deviceData.manufactured_at, deviceData.manufactured_by, deviceData.warranty_years, deviceData.warranty_expiry,
+              deviceData.battery_level, deviceData.battery_status, deviceData.battery_type, deviceData.expected_battery_life_days,
+              deviceData.device_health, deviceData.is_active, deviceData.created_at, String(id), "staff"
+            ]
+          );
+        }
+      }
+    });
+
     res.json({ success: true, message: "Staff updated successfully" });
   } catch (err: any) {
-    await client.query("ROLLBACK");
     console.error("Update employee error:", err);
-    res.status(500).json({ success: false, message: err.message || "Failed to update staff" });
-  } finally {
-    client.release();
+    console.error(err); // Temporary raw stack trace log
+    if (err.message === "Staff not found") {
+      res.status(404).json({ success: false, message: "Staff not found" });
+    } else {
+      res.status(500).json({ success: false, message: err.message || "Failed to update staff" });
+    }
   }
 });
 
@@ -777,20 +988,25 @@ app.delete("/api/employees/:id", async (req: Request, res: Response) => {
 
   const id = Number(req.params.id);
   try {
-    const result = await pool.query(
-      `DELETE FROM ${EMPLOYEE_TABLE} WHERE id = $1 AND org_id = $2`,
-      [id, orgId]
-    );
+    await withTransaction("DELETE /api/employees/:id", orgId, async (client) => {
+      const result = await client.query(
+        `DELETE FROM ${EMPLOYEE_TABLE} WHERE id = $1 AND org_id = $2`,
+        [id, orgId]
+      );
 
-    if (!result.rowCount) {
-      res.status(404).json({ success: false, message: "Staff not found" });
-      return;
-    }
+      if (!result.rowCount) {
+        throw new Error("Staff not found");
+      }
+    });
 
     res.json({ success: true, message: "Staff deleted successfully" });
-  } catch (err) {
+  } catch (err: any) {
     console.error("Delete employee error:", err);
-    res.status(500).json({ success: false, message: "Failed to delete staff" });
+    if (err.message === "Staff not found") {
+      res.status(404).json({ success: false, message: "Staff not found" });
+    } else {
+      res.status(500).json({ success: false, message: "Failed to delete staff" });
+    }
   }
 });
 
@@ -822,27 +1038,41 @@ app.get("/api/dashboard/stats", async (req: Request, res: Response) => {
   }
 
   try {
-    const vehicleCountQuery = await pool.query(
-      `SELECT COUNT(*)::int as count FROM ${VEHICLE_TABLE} WHERE org_id = $1`,
-      [orgId]
-    );
-    const employeeCountQuery = await pool.query(
-      `SELECT COUNT(*)::int as count FROM ${EMPLOYEE_TABLE} WHERE org_id = $1`,
-      [orgId]
-    );
-    const driverCountQuery = await pool.query(
-      `SELECT COUNT(*)::int as count FROM ${DRIVER_TABLE} WHERE org_id = $1`,
-      [orgId]
-    );
+    const stats = await withTransaction("GET /api/dashboard/stats", orgId, async (client) => {
+      const vehicleCountQuery = await client.query(
+        `SELECT COUNT(*)::int as count FROM ${VEHICLE_TABLE} WHERE org_id = $1`,
+        [orgId]
+      );
+      const employeeCountQuery = await client.query(
+        `SELECT COUNT(*)::int as count FROM ${EMPLOYEE_TABLE} WHERE org_id = $1`,
+        [orgId]
+      );
+      const driverCountQuery = await client.query(
+        `SELECT COUNT(*)::int as count FROM ${DRIVER_TABLE} WHERE org_id = $1`,
+        [orgId]
+      );
+      
+      const beaconCountQuery = await client.query(
+        `SELECT COUNT(*)::int as count FROM devices.beacons WHERE org_id = $1`,
+        [Number(orgId)]
+      );
+      const gpsCountQuery = await client.query(
+        `SELECT COUNT(*)::int as count FROM devices.gps WHERE org_id = $1`,
+        [Number(orgId)]
+      );
+      const deviceCount = (beaconCountQuery.rows[0]?.count || 0) + (gpsCountQuery.rows[0]?.count || 0);
 
-    res.json({
-      success: true,
-      data: {
+      return {
         vehicleCount: vehicleCountQuery.rows[0]?.count || 0,
         employeeCount: employeeCountQuery.rows[0]?.count || 0,
         driverCount: driverCountQuery.rows[0]?.count || 0,
-        deviceCount: 42
-      }
+        deviceCount
+      };
+    });
+
+    res.json({
+      success: true,
+      data: stats
     });
   } catch (err) {
     console.error("Dashboard Stats Fetch Error:", err);
@@ -859,34 +1089,162 @@ app.get("/api/dashboard/stats", async (req: Request, res: Response) => {
 });
 
 app.get("/api/vehicles/live/location/:tenantId", async (req: Request, res: Response) => {
-  const orgId = req.params.tenantId;
+  const orgId = req.params.tenantId as string;
   
   try {
-    const rows = await fetchRowsWithOrgFallback(VEHICLE_TABLE, orgId);
-    
-    // Transform rows to include a "gps" object for the dashboard map
-    const liveVehicles = rows.map(v => ({
-      id: v.id,
-      vehicle_name: v.vehicle_name || v.vehicle_number || "Unnamed Vehicle",
-      vehicle_number: v.vehicle_number,
-      battery: v.battery || 85,
-      status: v.status || "active",
-      gps: {
-        lat: Number(v.lat) || 12.9716, // Default to Bangalore if missing
-        lng: Number(v.lng) || 77.5946,
-        speed: Number(v.speed) || 0,
-        timestamp: v.last_gps_update || new Date().toISOString()
-      },
-      beacons: [] // Drivers/Passengers will be linked here if needed
-    }));
+    const liveVehicles = await withTransaction("GET /api/vehicles/live/location/:tenantId", orgId, async (client) => {
+      const query = `
+        SELECT 
+          v.id, v.vehicle_name, v.vehicle_number, v.battery, v.status,
+          g.last_known_location, g.last_ping,
+          d.id as driver_id, d.first_name as driver_first_name, d.last_name as driver_last_name
+        FROM institute.institute_vehicles v
+        LEFT JOIN institute.institute_gps g ON v.gps_device_id = g.device_id AND g.allocated_to_org::text = v.org_id
+        LEFT JOIN institute.institute_drivers d ON v.assigned_driver_id = d.id::text
+        WHERE v.org_id = $1
+      `;
+      const result = await client.query(query, [orgId]);
+      
+      // Fetch all staff assigned to any of these vehicles
+      const staffQuery = `
+        SELECT id, first_name, last_name, employee_id, assigned_vehicle_id
+        FROM institute.institute_employees
+        WHERE org_id = $1 AND assigned_vehicle_id IS NOT NULL
+      `;
+      const staffResult = await client.query(staffQuery, [orgId]);
+      const staffByVehicle = staffResult.rows.reduce((acc, staff) => {
+        if (!acc[staff.assigned_vehicle_id]) acc[staff.assigned_vehicle_id] = [];
+        acc[staff.assigned_vehicle_id].push(staff);
+        return acc;
+      }, {} as Record<number, any[]>);
+      
+      // Transform rows to include a "gps" object for the dashboard map
+      return result.rows.map(v => {
+        const loc = v.last_known_location || {};
+        
+        const beacons = [];
+        if (v.driver_first_name) {
+          beacons.push({
+            id: String(v.driver_id),
+            name: `${v.driver_first_name} ${v.driver_last_name || ''}`.trim(),
+            type: 'driver',
+            lastSeen: v.last_ping || new Date().toISOString()
+          });
+        }
+
+        // Add assigned staff to beacons
+        if (staffByVehicle[v.id]) {
+          staffByVehicle[v.id].forEach((staff: any) => {
+            beacons.push({
+              id: String(staff.id),
+              name: `${staff.first_name} ${staff.last_name || ''}`.trim(),
+              type: 'staff',
+              lastSeen: v.last_ping || new Date().toISOString()
+            });
+          });
+        }
+
+        return {
+          id: v.id,
+          vehicle_name: v.vehicle_name || v.vehicle_number || "Unnamed Vehicle",
+          vehicle_number: v.vehicle_number,
+          battery: v.battery || 85,
+          status: v.status || "active",
+          gps: {
+            lat: Number(loc.lat) || 12.9716, // Default to Bangalore if missing
+            lng: Number(loc.lng) || 77.5946,
+            speed: Number(loc.speed) || 0,
+            timestamp: v.last_ping || new Date().toISOString()
+          },
+          beacons: beacons
+        };
+      });
+    });
 
     res.json({
       success: true,
       data: liveVehicles
     });
-  } catch (err) {
+  } catch (err: any) {
     console.error("Live Location Fetch Error:", err);
     res.status(500).json({ success: false, message: "Failed to fetch live locations" });
+  }
+});
+
+app.get("/api/vehicles/track/:vehicleNumber/live/location/:tenantId", async (req: Request, res: Response) => {
+  const { vehicleNumber, tenantId } = req.params;
+  
+  try {
+    const query = `
+      SELECT 
+        v.id, v.vehicle_name, v.vehicle_number, v.battery, v.status,
+        g.last_known_location, g.last_ping,
+        d.id as driver_id, d.first_name as driver_first_name, d.last_name as driver_last_name
+      FROM institute.institute_vehicles v
+      LEFT JOIN institute.institute_gps g ON v.gps_device_id = g.device_id AND g.allocated_to_org::text = v.org_id
+      LEFT JOIN institute.institute_drivers d ON v.assigned_driver_id = d.id::text
+      WHERE v.org_id = $1 AND v.vehicle_number = $2
+      LIMIT 1
+    `;
+    const result = await withTransaction<any>("GET /live/location/:tenantId", tenantId as string, async (client) => {
+      return client.query(query, [tenantId, vehicleNumber]);
+    });
+    const vehicle = result.rows[0];
+
+    if (!vehicle) {
+      return res.status(404).json({ success: false, message: "Vehicle not found" });
+    }
+    
+    const loc = vehicle.last_known_location || {};
+    const beacons = [];
+    if (vehicle.driver_first_name) {
+      beacons.push({
+        id: String(vehicle.driver_id),
+        name: `${vehicle.driver_first_name} ${vehicle.driver_last_name || ''}`.trim(),
+        type: 'driver',
+        lastSeen: vehicle.last_ping || new Date().toISOString()
+      });
+    }
+
+    // Fetch assigned staff for this specific vehicle
+    const staffQuery = `
+      SELECT id, first_name, last_name, employee_id
+      FROM institute.institute_employees
+      WHERE org_id = $1 AND assigned_vehicle_id = $2
+    `;
+    const staffResult = await pool.query(staffQuery, [tenantId, vehicle.id]);
+    staffResult.rows.forEach(staff => {
+      beacons.push({
+        id: String(staff.id),
+        name: `${staff.first_name} ${staff.last_name || ''}`.trim(),
+        type: 'staff',
+        lastSeen: vehicle.last_ping || new Date().toISOString()
+      });
+    });
+
+    // Transform to match LiveVehicle frontend interface
+    const liveVehicle = {
+      id: vehicle.id,
+      vehicle_name: vehicle.vehicle_name || vehicle.vehicle_number || "Unnamed Vehicle",
+      vehicle_number: vehicle.vehicle_number,
+      battery: vehicle.battery || 85,
+      status: vehicle.status || "active",
+      gps: {
+        lat: Number(loc.lat) || 12.9716, // Default to Bangalore if missing
+        lng: Number(loc.lng) || 77.5946,
+        speed: Number(loc.speed) || 0,
+        timestamp: vehicle.last_ping || new Date().toISOString()
+      },
+      beacons: beacons
+    };
+
+    res.json({
+      success: true,
+      data: liveVehicle
+    });
+  } catch (err) {
+    console.error("Single Live Location Fetch Error:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch vehicle live location" });
   }
 });
 
@@ -905,22 +1263,51 @@ app.get("/api/vehicles/:id", async (req: Request, res: Response) => {
 
   try {
     const columns = await getTableColumns(VEHICLE_TABLE);
+    
+    const query = `
+      SELECT v.*, 
+             d.first_name as driver_first_name, 
+             d.last_name as driver_last_name, 
+             d.mobile_number as driver_mobile_number, 
+             d.employee_id as driver_employee_id
+      FROM ${VEHICLE_TABLE} v
+      LEFT JOIN institute.institute_drivers d ON v.assigned_driver_id = d.id::text
+      WHERE v.id = $1 ${columns.has("org_id") ? "AND v.org_id = $2" : ""}
+      LIMIT 1
+    `;
+
     if (columns.has("org_id")) {
-      const scoped = await pool.query(`SELECT * FROM ${VEHICLE_TABLE} WHERE org_id = $1 AND id = $2 LIMIT 1`, [orgId, id]);
+      const scoped = await withTransaction("GET /vehicles/:id", orgId, async (client) => {
+        return client.query(query, [id, String(orgId)]);
+      });
       if (scoped.rows.length) {
         res.json({ success: true, data: normalizeVehicleRow(scoped.rows[0]) });
         return;
       }
     }
 
-    const all = await pool.query(`SELECT * FROM ${VEHICLE_TABLE} WHERE id = $1 LIMIT 1`, [id]);
+    // Fallback global lookup
+    const all = await withTransaction("GET /vehicles/:id fallback", orgId, async (client) => {
+      const globalQuery = `
+        SELECT v.*, 
+               d.first_name as driver_first_name, 
+               d.last_name as driver_last_name, 
+               d.mobile_number as driver_mobile_number, 
+               d.employee_id as driver_employee_id
+        FROM ${VEHICLE_TABLE} v
+        LEFT JOIN institute.institute_drivers d ON v.assigned_driver_id = d.id::text
+        WHERE v.id = $1 LIMIT 1
+      `;
+      return client.query(globalQuery, [id]);
+    });
     if (!all.rows.length) {
       res.status(404).json({ success: false, message: "Vehicle not found" });
       return;
     }
 
     res.json({ success: true, data: normalizeVehicleRow(all.rows[0]) });
-  } catch {
+  } catch (err) {
+    console.error("Fetch vehicle by ID error:", err);
     res.status(500).json({ success: false, message: "Failed to fetch vehicle" });
   }
 });
@@ -939,35 +1326,74 @@ app.post("/api/vehicles", upload.any(), async (req: Request, res: Response) => {
   }
 
   try {
-    const columns = await getTableColumns(VEHICLE_TABLE);
-    const payload = toVehiclePayload(req.body as Record<string, unknown>, columns);
-    if (columns.has("vehicle_number")) payload.vehicle_number = vehicleNumber;
-    if (columns.has("org_id")) payload.org_id = orgId;
-    if (columns.has("status") && !payload.status) payload.status = "active";
-    if (columns.has("created_at")) payload.created_at = new Date().toISOString();
-    if (columns.has("updated_at")) payload.updated_at = new Date().toISOString();
+    const newVehicle = await withTransaction("POST /api/vehicles", orgId, async (client) => {
+      const columns = await getTableColumns(VEHICLE_TABLE);
+      const payload = toVehiclePayload(req.body as Record<string, unknown>, columns);
+      if (columns.has("vehicle_number")) payload.vehicle_number = vehicleNumber;
+      if (columns.has("org_id")) payload.org_id = orgId;
+      if (columns.has("status") && !payload.status) payload.status = "active";
+      if (columns.has("created_at")) payload.created_at = new Date().toISOString();
+      if (columns.has("updated_at")) payload.updated_at = new Date().toISOString();
 
-    // Handle files (Azure Blob Storage)
-    await processFiles(req.files, columns, payload);
+      // Handle files (Azure Blob Storage)
+      await processFiles(req.files, columns, payload);
 
-    const insertColumns = Object.keys(payload);
-    if (!insertColumns.length) {
-      res.status(400).json({ success: false, message: "No valid vehicle fields to save" });
-      return;
-    }
+      const insertColumns = Object.keys(payload);
+      if (!insertColumns.length) {
+        throw new Error("No valid vehicle fields to save");
+      }
 
-    const placeholders = insertColumns.map((_, idx) => `$${idx + 1}`).join(", ");
-    const values = insertColumns.map((key) => payload[key]);
+      const placeholders = insertColumns.map((_, idx) => `$${idx + 1}`).join(", ");
+      const values = insertColumns.map((key) => payload[key]);
 
-    const result = await pool.query(
-      `INSERT INTO ${VEHICLE_TABLE} (${insertColumns.join(", ")})
-       VALUES (${placeholders})
-       RETURNING *`,
-      values
-    );
-    res.status(201).json({ success: true, data: normalizeVehicleRow(result.rows[0]), message: "Vehicle created successfully" });
+      const result = await client.query(
+        `INSERT INTO ${VEHICLE_TABLE} (${insertColumns.join(", ")})
+         VALUES (${placeholders})
+         RETURNING *`,
+        values
+      );
+      const newVehicleRow = result.rows[0];
+
+      // --- Track GPS assignment in institute table ---
+      if (newVehicleRow.gps_device_id) {
+        const devCheck = await client.query(
+          `SELECT * FROM devices.gps WHERE device_id = $1 AND org_id = $2 LIMIT 1`,
+          [newVehicleRow.gps_device_id, Number(orgId)]
+        );
+        if (devCheck.rows.length) {
+          const deviceData = devCheck.rows[0];
+          const assignedLocation = generateUniqueLocation(deviceData.last_known_location);
+          await client.query(
+            `INSERT INTO institute.institute_gps (
+              id, device_id, sim_number, network_provider, device_health, status,
+              allocated_to_org, is_active, last_known_location, last_ping,
+              assigned_to, assigned_type, synced_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
+            ON CONFLICT (id) DO UPDATE SET
+              assigned_to = EXCLUDED.assigned_to,
+              assigned_type = EXCLUDED.assigned_type,
+              last_known_location = EXCLUDED.last_known_location,
+              synced_at = NOW()`,
+            [
+              deviceData.id, deviceData.device_id, deviceData.sim_number, deviceData.network_provider, deviceData.device_health, deviceData.status,
+              Number(orgId), deviceData.is_active, assignedLocation, deviceData.last_ping || new Date().toISOString(),
+              String(newVehicleRow.id), "vehicle"
+            ]
+          );
+        }
+      }
+
+      return newVehicleRow;
+    });
+
+    res.status(201).json({ success: true, data: normalizeVehicleRow(newVehicle), message: "Vehicle created successfully" });
   } catch (e: any) {
-    res.status(500).json({ success: false, message: e?.message || "Failed to create vehicle" });
+    console.error("Create vehicle error:", e);
+    if (e.message === "No valid vehicle fields to save") {
+      res.status(400).json({ success: false, message: e.message });
+    } else {
+      res.status(500).json({ success: false, message: e?.message || "Failed to create vehicle" });
+    }
   }
 });
 
@@ -985,46 +1411,93 @@ app.put("/api/vehicles/:id", upload.any(), async (req: Request, res: Response) =
   }
 
   try {
-    const columns = await getTableColumns(VEHICLE_TABLE);
-    const payload = toVehiclePayload(req.body as Record<string, unknown>, columns);
-    if (columns.has("updated_at")) payload.updated_at = new Date().toISOString();
+    const updatedVehicle = await withTransaction("PUT /api/vehicles/:id", orgId, async (client) => {
+      const columns = await getTableColumns(VEHICLE_TABLE);
+      const payload = toVehiclePayload(req.body as Record<string, unknown>, columns);
+      if (columns.has("updated_at")) payload.updated_at = new Date().toISOString();
 
-    // Handle files (Azure Blob Storage)
-    await processFiles(req.files, columns, payload);
+      // Handle files (Azure Blob Storage)
+      await processFiles(req.files, columns, payload);
 
-    const updates = Object.keys(payload);
-    if (!updates.length) {
-      res.status(400).json({ success: false, message: "No fields provided for update" });
-      return;
-    }
+      const updates = Object.keys(payload);
+      if (!updates.length) {
+        throw new Error("No fields provided for update");
+      }
 
-    const setClause = updates.map((key, idx) => `${key} = $${idx + 1}`).join(", ");
-    const values = updates.map((key) => payload[key]);
+      const setClause = updates.map((key, idx) => `${key} = $${idx + 1}`).join(", ");
+      const values = updates.map((key) => payload[key]);
 
-    const whereClause = columns.has("org_id")
-      ? `id = $${values.length + 1} AND org_id = $${values.length + 2}`
-      : `id = $${values.length + 1}`;
+      const whereClause = columns.has("org_id")
+        ? `id = $${values.length + 1} AND org_id = $${values.length + 2}`
+        : `id = $${values.length + 1}`;
 
-    const params = columns.has("org_id")
-      ? [...values, id, orgId]
-      : [...values, id];
+      const params = columns.has("org_id")
+        ? [...values, id, orgId]
+        : [...values, id];
 
-    const result = await pool.query(
-      `UPDATE ${VEHICLE_TABLE}
-       SET ${setClause}
-       WHERE ${whereClause}
-       RETURNING *`,
-      params
-    );
+      const result = await client.query(
+        `UPDATE ${VEHICLE_TABLE}
+         SET ${setClause}
+         WHERE ${whereClause}
+         RETURNING *`,
+        params
+      );
 
-    if (!result.rows.length) {
-      res.status(404).json({ success: false, message: "Vehicle not found" });
-      return;
-    }
+      if (!result.rows.length) {
+        throw new Error("Vehicle not found");
+      }
 
-    res.json({ success: true, data: normalizeVehicleRow(result.rows[0]), message: "Vehicle updated successfully" });
+      const updatedRow = result.rows[0];
+
+      // --- Track GPS assignment in institute table ---
+      // Clear any old GPS assignment for this vehicle by deleting the row
+      await client.query(
+        `DELETE FROM institute.institute_gps
+         WHERE assigned_to = $1 AND assigned_type = 'vehicle' AND allocated_to_org = $2`,
+        [String(id), Number(orgId)]
+      );
+      // Set new GPS assignment if provided
+      if (updatedRow.gps_device_id) {
+        const devCheck = await client.query(
+          `SELECT * FROM devices.gps WHERE device_id = $1 AND org_id = $2 LIMIT 1`,
+          [updatedRow.gps_device_id, Number(orgId)]
+        );
+        if (devCheck.rows.length) {
+          const deviceData = devCheck.rows[0];
+          const assignedLocation = generateUniqueLocation(deviceData.last_known_location);
+          await client.query(
+            `INSERT INTO institute.institute_gps (
+              id, device_id, sim_number, network_provider, device_health, status,
+              allocated_to_org, is_active, last_known_location, last_ping,
+              assigned_to, assigned_type, synced_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
+            ON CONFLICT (id) DO UPDATE SET
+              assigned_to = EXCLUDED.assigned_to,
+              assigned_type = EXCLUDED.assigned_type,
+              last_known_location = EXCLUDED.last_known_location,
+              synced_at = NOW()`,
+            [
+              deviceData.id, deviceData.device_id, deviceData.sim_number, deviceData.network_provider, deviceData.device_health, deviceData.status,
+              Number(orgId), deviceData.is_active, assignedLocation, deviceData.last_ping || new Date().toISOString(),
+              String(id), "vehicle"
+            ]
+          );
+        }
+      }
+
+      return updatedRow;
+    });
+
+    res.json({ success: true, data: normalizeVehicleRow(updatedVehicle), message: "Vehicle updated successfully" });
   } catch (e: any) {
-    res.status(500).json({ success: false, message: e?.message || "Failed to update vehicle" });
+    console.error("Update vehicle error:", e);
+    if (e.message === "Vehicle not found") {
+      res.status(404).json({ success: false, message: "Vehicle not found" });
+    } else if (e.message === "No fields provided for update") {
+      res.status(400).json({ success: false, message: e.message });
+    } else {
+      res.status(500).json({ success: false, message: e?.message || "Failed to update vehicle" });
+    }
   }
 });
 
@@ -1042,21 +1515,70 @@ app.delete("/api/vehicles/:id", async (req: Request, res: Response) => {
   }
 
   try {
-    const columns = await getTableColumns(VEHICLE_TABLE);
-    const result = columns.has("org_id")
-      ? await pool.query(`DELETE FROM ${VEHICLE_TABLE} WHERE org_id = $1 AND id = $2`, [orgId, id])
-      : await pool.query(`DELETE FROM ${VEHICLE_TABLE} WHERE id = $1`, [id]);
-    if (!result.rowCount) {
-      res.status(404).json({ success: false, message: "Vehicle not found" });
-      return;
-    }
+    await withTransaction("DELETE /api/vehicles/:id", orgId, async (client) => {
+      const columns = await getTableColumns(VEHICLE_TABLE);
+      const result = columns.has("org_id")
+        ? await client.query(`DELETE FROM ${VEHICLE_TABLE} WHERE org_id = $1 AND id = $2`, [orgId, id])
+        : await client.query(`DELETE FROM ${VEHICLE_TABLE} WHERE id = $1`, [id]);
+      if (!result.rowCount) {
+        throw new Error("Vehicle not found");
+      }
+    });
+
     res.json({ success: true, message: "Vehicle deleted successfully" });
-  } catch {
-    res.status(500).json({ success: false, message: "Failed to delete vehicle" });
+  } catch (e: any) {
+    console.error("Delete vehicle error:", e);
+    if (e.message === "Vehicle not found") {
+      res.status(404).json({ success: false, message: "Vehicle not found" });
+    } else {
+      res.status(500).json({ success: false, message: "Failed to delete vehicle" });
+    }
   }
 });
 
 // Drivers
+app.get("/api/drivers/unassigned", async (req: Request, res: Response) => {
+  const orgId = getOrgIdFromRequest(req);
+  if (!orgId) {
+    res.status(401).json({ message: "Unauthorized" });
+    return;
+  }
+
+  const currentAssignedId = req.query.current_assigned ? String(req.query.current_assigned) : null;
+
+  try {
+    const data = await withTransaction("GET /api/drivers/unassigned", orgId, async (client) => {
+      // Find all drivers that are not assigned to any vehicle in this org, 
+      // OR are the currently assigned driver for the vehicle being edited.
+      let query = `
+        SELECT d.id, d.first_name, d.last_name, d.employee_id 
+        FROM institute.institute_drivers d
+        WHERE d.org_id = $1 
+          AND (
+            d.id::text NOT IN (
+              SELECT assigned_driver_id FROM institute.institute_vehicles 
+              WHERE org_id = $1 AND assigned_driver_id IS NOT NULL
+            )
+      `;
+      const params = [String(orgId)];
+      
+      if (currentAssignedId) {
+        query += ` OR d.id::text = $2`;
+        params.push(currentAssignedId);
+      }
+      
+      query += `) ORDER BY d.first_name ASC`;
+      
+      const result = await client.query(query, params);
+      return result.rows;
+    });
+
+    res.json({ success: true, data });
+  } catch (err) {
+    console.error("Fetch unassigned drivers error:", err);
+    res.status(500).json({ success: false, message: "Failed to fetch unassigned drivers" });
+  }
+});
 app.get("/api/drivers", async (req: Request, res: Response) => {
   const orgId = getOrgIdFromRequest(req);
   if (!orgId) {
@@ -1090,26 +1612,26 @@ app.get("/api/drivers/:id", async (req: Request, res: Response) => {
   }
 
   try {
-    let driverData: any = null;
-    
-    const scoped = await pool.query(`SELECT * FROM ${DRIVER_TABLE} WHERE org_id = $1 AND id = $2 LIMIT 1`, [orgId, id]);
-    if (scoped.rows.length) {
-      driverData = scoped.rows[0];
-    } else {
-      const all = await pool.query(`SELECT * FROM ${DRIVER_TABLE} WHERE id = $1 LIMIT 1`, [id]);
-      if (!all.rows.length) {
-        res.status(404).json({ success: false, message: "Driver not found" });
-        return;
+    const driverData = await withTransaction("GET /api/drivers/:id", orgId, async (client) => {
+      const scoped = await client.query(`SELECT * FROM ${DRIVER_TABLE} WHERE org_id = $1 AND id = $2 LIMIT 1`, [orgId, id]);
+      if (!scoped.rows.length) {
+        throw new Error("Driver not found");
       }
-      driverData = all.rows[0];
-    }
+      const driver = scoped.rows[0];
 
-    const licenses = await pool.query(`SELECT * FROM institute.institute_driver_license_insurance WHERE driver_id = $1`, [id]);
-    driverData.license_insurance = licenses.rows;
+      const licenses = await client.query(`SELECT * FROM institute.institute_driver_license_insurance WHERE driver_id = $1`, [id]);
+      driver.license_insurance = licenses.rows;
+      return driver;
+    });
 
     res.json({ success: true, data: driverData });
-  } catch {
-    res.status(500).json({ success: false, message: "Failed to fetch driver" });
+  } catch (err: any) {
+    console.error("Fetch driver detail error:", err);
+    if (err.message === "Driver not found") {
+      res.status(404).json({ success: false, message: "Driver not found" });
+    } else {
+      res.status(500).json({ success: false, message: "Failed to fetch driver" });
+    }
   }
 });
 
@@ -1120,54 +1642,91 @@ app.post("/api/drivers", upload.any(), async (req: Request, res: Response) => {
     return;
   }
 
-  const columns = await getTableColumns(DRIVER_TABLE);
-
-  const payload = toDriverPayload(req.body as Record<string, unknown>, columns);
-  if (columns.has("org_id")) payload.org_id = orgId;
-  if (columns.has("created_at")) payload.created_at = new Date();
-  if (columns.has("updated_at")) payload.updated_at = new Date();
-
-  // Attach uploaded files (Azure Blob Storage)
-  await processFiles(req.files, columns, payload);
-
   try {
-    const keys = Object.keys(payload);
-    const vals = Object.values(payload);
-    const placeholders = keys.map((_, i) => `$${i + 1}`).join(", ");
-    
-    if (keys.length === 0) {
-       res.status(400).json({ success: false, message: "No driver provided" });
-       return;
-    }
+    const newDriver = await withTransaction("POST /api/drivers", orgId, async (client) => {
+      const columns = await getTableColumns(DRIVER_TABLE);
 
-    const result = await pool.query(
-      `INSERT INTO ${DRIVER_TABLE} (${keys.join(", ")}) VALUES (${placeholders}) RETURNING *`,
-      vals
-    );
+      const payload = toDriverPayload(req.body as Record<string, unknown>, columns);
+      if (columns.has("org_id")) payload.org_id = orgId;
+      if (columns.has("created_at")) payload.created_at = new Date();
+      if (columns.has("updated_at")) payload.updated_at = new Date();
 
-    const driverId = result.rows[0].id;
-    if (req.body.license_insurance) {
-      try {
-        const licenses = JSON.parse(String(req.body.license_insurance));
-        if (Array.isArray(licenses)) {
-          for (const lic of licenses) {
-            if (!lic.type) continue;
-            await pool.query(
-              `INSERT INTO institute.institute_driver_license_insurance (driver_id, type, number, issue_date, exp_date)
-               VALUES ($1, $2, $3, $4, $5)`,
-              [driverId, lic.type, lic.number, lic.issue_date || null, lic.exp_date || null]
-            );
-          }
-        }
-      } catch (err) {
-        console.error("License parse error", err);
+      // Attach uploaded files (Azure Blob Storage)
+      await processFiles(req.files, columns, payload);
+
+      const keys = Object.keys(payload);
+      const vals = Object.values(payload);
+      const placeholders = keys.map((_, i) => `$${i + 1}`).join(", ");
+      
+      if (keys.length === 0) {
+         throw new Error("No driver provided");
       }
-    }
 
-    res.status(201).json({ success: true, data: result.rows[0], message: "Driver created successfully" });
+      const result = await client.query(
+        `INSERT INTO ${DRIVER_TABLE} (${keys.join(", ")}) VALUES (${placeholders}) RETURNING *`,
+        vals
+      );
+
+      const driverId = result.rows[0].id;
+      if (req.body.license_insurance) {
+        try {
+          const licenses = JSON.parse(String(req.body.license_insurance));
+          if (Array.isArray(licenses)) {
+            for (const lic of licenses) {
+              if (!lic.type) continue;
+              await client.query(
+                `INSERT INTO institute.institute_driver_license_insurance (driver_id, type, number, issue_date, exp_date)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [driverId, lic.type, lic.number, lic.issue_date || null, lic.exp_date || null]
+              );
+            }
+          }
+        } catch (err) {
+          console.error("License parse error", err);
+        }
+      }
+
+      // --- Track Beacon assignment in institute table ---
+      const driverRow = result.rows[0];
+      if (driverRow.beacon_id) {
+        const devCheck = await client.query(
+          `SELECT * FROM devices.beacons WHERE device_id = $1 AND org_id = $2 LIMIT 1`,
+          [driverRow.beacon_id, Number(orgId)]
+        );
+        if (devCheck.rows.length) {
+          const deviceData = devCheck.rows[0];
+          await client.query(
+            `INSERT INTO institute.institute_beacon (
+              id, device_id, sequence_id, allocated_to_org, status, device_type,
+              manufactured_at, manufactured_by, warranty_years, warranty_expiry,
+              battery_level, battery_status, battery_type, expected_battery_life_days,
+              device_health, is_active, created_at, assigned_to, assigned_type, synced_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW())
+            ON CONFLICT (id) DO UPDATE SET
+              assigned_to = EXCLUDED.assigned_to,
+              assigned_type = EXCLUDED.assigned_type,
+              synced_at = NOW()`,
+            [
+              deviceData.id, deviceData.device_id, deviceData.sequence_id, Number(orgId), deviceData.status, deviceData.device_type,
+              deviceData.manufactured_at, deviceData.manufactured_by, deviceData.warranty_years, deviceData.warranty_expiry,
+              deviceData.battery_level, deviceData.battery_status, deviceData.battery_type, deviceData.expected_battery_life_days,
+              deviceData.device_health, deviceData.is_active, deviceData.created_at, String(driverRow.id), "driver"
+            ]
+          );
+        }
+      }
+
+      return driverRow;
+    });
+
+    res.status(201).json({ success: true, data: newDriver, message: "Driver created successfully" });
   } catch (e: any) {
     console.error("CREATE DRIVER ERROR:", e);
-    res.status(500).json({ success: false, message: e?.message || "Failed to create driver" });
+    if (e.message === "No driver provided") {
+      res.status(400).json({ success: false, message: e.message });
+    } else {
+      res.status(500).json({ success: false, message: e?.message || "Failed to create driver" });
+    }
   }
 });
 
@@ -1184,71 +1743,109 @@ app.put("/api/drivers/:id", upload.any(), async (req: Request, res: Response) =>
     return;
   }
 
-  const columns = await getTableColumns(DRIVER_TABLE);
-
-  const payload = toDriverPayload(req.body as Record<string, unknown>, columns);
-  if (columns.has("updated_at")) payload.updated_at = new Date();
-
-  // Update files (Azure Blob Storage)
-  await processFiles(req.files, columns, payload);
-
-  if (Object.keys(payload).length === 0) {
-    res.json({ success: true, message: "No changes detected" });
-    return;
-  }
-
   try {
-    const setClause = generateSetClause(payload, columns.has("org_id") ? 3 : 2);
-    const params = [
-      ...Object.values(payload),
-      ...(columns.has("org_id") ? [id, orgId] : [id])
-    ];
-    
-    // Switch parameters based on id and org placement in the query
-    const whereClause = columns.has("org_id") ? `id = $1 AND org_id = $2` : `id = $1`;
-    const finalParams = columns.has("org_id") ? [id, orgId, ...Object.values(payload)] : [id, ...Object.values(payload)];
+    const updatedDriver = await withTransaction("PUT /api/drivers/:id", orgId, async (client) => {
+      const columns = await getTableColumns(DRIVER_TABLE);
 
-    const finalSetClause = generateSetClause(payload, columns.has("org_id") ? 3 : 2);
+      const payload = toDriverPayload(req.body as Record<string, unknown>, columns);
+      if (columns.has("updated_at")) payload.updated_at = new Date();
 
-    const result = await pool.query(
-      `UPDATE ${DRIVER_TABLE}
-       SET ${finalSetClause}
-       WHERE ${whereClause}
-       RETURNING *`,
-      finalParams
-    );
+      // Update files (Azure Blob Storage)
+      await processFiles(req.files, columns, payload);
 
-    if (!result.rows.length) {
-      res.status(404).json({ success: false, message: "Driver not found" });
-      return;
-    }
-
-    if (req.body.license_insurance) {
-      try {
-        const licenses = JSON.parse(String(req.body.license_insurance));
-        if (Array.isArray(licenses)) {
-          await pool.query(`DELETE FROM institute.institute_driver_license_insurance WHERE driver_id = $1`, [id]);
-          for (const lic of licenses) {
-            if (!lic.type) continue;
-            await pool.query(
-              `INSERT INTO institute.institute_driver_license_insurance (driver_id, type, number, issue_date, exp_date)
-               VALUES ($1, $2, $3, $4, $5)`,
-              [id, lic.type, lic.number, lic.issue_date || null, lic.exp_date || null]
-            );
-          }
-        }
-      } catch (err) {
-        console.error("License parse error", err);
+      if (Object.keys(payload).length === 0) {
+        throw new Error("No changes detected");
       }
-    }
 
-    res.json({ success: true, data: result.rows[0], message: "Driver updated successfully" });
+      // Switch parameters based on id and org placement in the query
+      const whereClause = columns.has("org_id") ? `id = $1 AND org_id = $2` : `id = $1`;
+      const finalParams = columns.has("org_id") ? [id, orgId, ...Object.values(payload)] : [id, ...Object.values(payload)];
+
+      const finalSetClause = generateSetClause(payload, columns.has("org_id") ? 3 : 2);
+
+      const result = await client.query(
+        `UPDATE ${DRIVER_TABLE}
+         SET ${finalSetClause}
+         WHERE ${whereClause}
+         RETURNING *`,
+        finalParams
+      );
+
+      if (!result.rows.length) {
+        throw new Error("Driver not found");
+      }
+
+      if (req.body.license_insurance) {
+        try {
+          const licenses = JSON.parse(String(req.body.license_insurance));
+          if (Array.isArray(licenses)) {
+            await client.query(`DELETE FROM institute.institute_driver_license_insurance WHERE driver_id = $1`, [id]);
+            for (const lic of licenses) {
+              if (!lic.type) continue;
+              await client.query(
+                `INSERT INTO institute.institute_driver_license_insurance (driver_id, type, number, issue_date, exp_date)
+                 VALUES ($1, $2, $3, $4, $5)`,
+                [id, lic.type, lic.number, lic.issue_date || null, lic.exp_date || null]
+              );
+            }
+          }
+        } catch (err) {
+          console.error("License parse error", err);
+        }
+      }
+
+      // --- Track Beacon assignment in institute table ---
+      // Clear any old beacon assignment for this driver by deleting the row
+      await client.query(
+        `DELETE FROM institute.institute_beacon
+         WHERE assigned_to = $1 AND assigned_type = 'driver' AND allocated_to_org = $2`,
+        [String(id), Number(orgId)]
+      );
+      // Set new beacon assignment if provided
+      const driverBeaconId = result.rows[0].beacon_id ? String(result.rows[0].beacon_id).trim() : null;
+      if (driverBeaconId) {
+        const devCheck = await client.query(
+          `SELECT * FROM devices.beacons WHERE device_id = $1 AND org_id = $2 LIMIT 1`,
+          [driverBeaconId, Number(orgId)]
+        );
+        if (devCheck.rows.length) {
+          const deviceData = devCheck.rows[0];
+          await client.query(
+            `INSERT INTO institute.institute_beacon (
+              id, device_id, sequence_id, allocated_to_org, status, device_type,
+              manufactured_at, manufactured_by, warranty_years, warranty_expiry,
+              battery_level, battery_status, battery_type, expected_battery_life_days,
+              device_health, is_active, created_at, assigned_to, assigned_type, synced_at
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW())
+            ON CONFLICT (id) DO UPDATE SET
+              assigned_to = EXCLUDED.assigned_to,
+              assigned_type = EXCLUDED.assigned_type,
+              synced_at = NOW()`,
+            [
+              deviceData.id, deviceData.device_id, deviceData.sequence_id, Number(orgId), deviceData.status, deviceData.device_type,
+              deviceData.manufactured_at, deviceData.manufactured_by, deviceData.warranty_years, deviceData.warranty_expiry,
+              deviceData.battery_level, deviceData.battery_status, deviceData.battery_type, deviceData.expected_battery_life_days,
+              deviceData.device_health, deviceData.is_active, deviceData.created_at, String(id), "driver"
+            ]
+          );
+        }
+      }
+
+      return result.rows[0];
+    });
+
+    res.json({ success: true, data: updatedDriver, message: "Driver updated successfully" });
   } catch (e: any) {
     console.error("UPDATE DRIVER ERROR:", e);
-    res.status(500).json({ success: false, message: e?.message || "Failed to update driver" });
+    if (e.message === "Driver not found") {
+      res.status(404).json({ success: false, message: "Driver not found" });
+    } else if (e.message === "No changes detected") {
+      res.json({ success: true, message: "No changes detected" });
+    } else {
+      res.status(500).json({ success: false, message: e?.message || "Failed to update driver" });
+    }
   }
 });
-
 
 app.get("/api/devices", async (req: Request, res: Response) => {
   const orgId = getOrgIdFromRequest(req);
@@ -1258,73 +1855,101 @@ app.get("/api/devices", async (req: Request, res: Response) => {
   }
 
   try {
-    const beaconsRes = await pool.query(
-      `SELECT id, device_id, sequence_id, assigned_to, assigned_type, status, device_type, battery_level, battery_status, device_health, is_active, created_at, synced_at 
-       FROM devices.beacons 
-       WHERE org_id = $1 
-       ORDER BY device_id ASC`,
-      [Number(orgId)]
-    );
+    const result = await withTransaction("GET /api/devices", orgId, async (client) => {
+      const beaconsRes = await client.query(
+        `SELECT 
+           d.id, 
+           d.device_id, 
+           d.sequence_id, 
+           i.assigned_to, 
+           i.assigned_type, 
+           d.status, 
+           d.device_type, 
+           d.battery_level, 
+           d.battery_status, 
+           d.device_health, 
+           d.is_active, 
+           d.created_at, 
+           COALESCE(i.synced_at, d.synced_at) as synced_at 
+         FROM devices.beacons d
+         LEFT JOIN institute.institute_beacon i 
+           ON d.device_id = i.device_id AND i.allocated_to_org = d.org_id
+         WHERE d.org_id = $1 
+         ORDER BY d.device_id ASC`,
+        [Number(orgId)]
+      );
 
-    const gpsRes = await pool.query(
-      `SELECT id, device_id, sim_number, network_provider, device_health, status, assigned_to, assigned_type, is_active, synced_at 
-       FROM devices.gps 
-       WHERE org_id = $1 
-       ORDER BY device_id ASC`,
-      [Number(orgId)]
-    );
+      const gpsRes = await client.query(
+        `SELECT 
+           d.id, 
+           d.device_id, 
+           d.sim_number, 
+           d.network_provider, 
+           d.device_health, 
+           d.status, 
+           i.assigned_to, 
+           i.assigned_type, 
+           d.is_active, 
+           COALESCE(i.synced_at, d.synced_at) as synced_at 
+         FROM devices.gps d
+         LEFT JOIN institute.institute_gps i 
+           ON d.device_id = i.device_id AND i.allocated_to_org = d.org_id
+         WHERE d.org_id = $1 
+         ORDER BY d.device_id ASC`,
+        [Number(orgId)]
+      );
 
-    const enrichDevices = async (devices: any[]) => {
-      const enriched = [];
-      for (const dev of devices) {
-        let assignedToName = null;
-        if (dev.assigned_to && dev.assigned_type) {
-          const idVal = Number(dev.assigned_to);
-          if (Number.isFinite(idVal)) {
-            if (dev.assigned_type === "staff") {
-              const r = await pool.query(
-                `SELECT first_name, last_name FROM institute.institute_employees WHERE id = $1 LIMIT 1`,
-                [idVal]
-              );
-              if (r.rows.length) {
-                assignedToName = `${r.rows[0].first_name} ${r.rows[0].last_name}`.trim();
-              }
-            } else if (dev.assigned_type === "driver") {
-              const r = await pool.query(
-                `SELECT first_name, last_name FROM institute.institute_drivers WHERE id = $1 LIMIT 1`,
-                [idVal]
-              );
-              if (r.rows.length) {
-                assignedToName = `${r.rows[0].first_name} ${r.rows[0].last_name}`.trim();
-              }
-            } else if (dev.assigned_type === "vehicle") {
-              const r = await pool.query(
-                `SELECT vehicle_number, vehicle_name FROM institute.institute_vehicles WHERE id = $1 LIMIT 1`,
-                [idVal]
-              );
-              if (r.rows.length) {
-                assignedToName = r.rows[0].vehicle_number || r.rows[0].vehicle_name;
+      const enrichDevices = async (devices: any[]) => {
+        const enriched = [];
+        for (const dev of devices) {
+          let assignedToName = null;
+          if (dev.assigned_to && dev.assigned_type) {
+            const idVal = Number(dev.assigned_to);
+            if (Number.isFinite(idVal)) {
+              if (dev.assigned_type === "staff") {
+                const r = await client.query(
+                  `SELECT first_name, last_name FROM institute.institute_employees WHERE id = $1 LIMIT 1`,
+                  [idVal]
+                );
+                if (r.rows.length) {
+                  assignedToName = `${r.rows[0].first_name} ${r.rows[0].last_name}`.trim();
+                }
+              } else if (dev.assigned_type === "driver") {
+                const r = await client.query(
+                  `SELECT first_name, last_name FROM institute.institute_drivers WHERE id = $1 LIMIT 1`,
+                  [idVal]
+                );
+                if (r.rows.length) {
+                  assignedToName = `${r.rows[0].first_name} ${r.rows[0].last_name}`.trim();
+                }
+              } else if (dev.assigned_type === "vehicle") {
+                const r = await client.query(
+                  `SELECT vehicle_number, vehicle_name FROM institute.institute_vehicles WHERE id = $1 LIMIT 1`,
+                  [idVal]
+                );
+                if (r.rows.length) {
+                  assignedToName = r.rows[0].vehicle_number || r.rows[0].vehicle_name;
+                }
               }
             }
           }
+          enriched.push({
+            ...dev,
+            assigned_to_name: assignedToName,
+          });
         }
-        enriched.push({
-          ...dev,
-          assigned_to_name: assignedToName,
-        });
-      }
-      return enriched;
-    };
+        return enriched;
+      };
 
-    const beaconsEnriched = await enrichDevices(beaconsRes.rows);
-    const gpsEnriched = await enrichDevices(gpsRes.rows);
+      const beaconsEnriched = await enrichDevices(beaconsRes.rows);
+      const gpsEnriched = await enrichDevices(gpsRes.rows);
+
+      return { beacons: beaconsEnriched, gpsDevices: gpsEnriched };
+    });
 
     res.json({
       success: true,
-      data: {
-        beacons: beaconsEnriched,
-        gpsDevices: gpsEnriched,
-      },
+      data: result,
     });
   } catch (err) {
     console.error("Fetch devices error:", err);
@@ -1345,62 +1970,94 @@ app.post("/api/devices/assign", async (req: Request, res: Response) => {
     return;
   }
 
-  const client = await pool.connect();
   try {
-    await client.query("BEGIN");
+    await withTransaction("POST /api/devices/assign", orgId, async (client) => {
+      const devTable = deviceType === "beacon" ? "devices.beacons" : "devices.gps";
 
-    const table = deviceType === "beacon" ? "devices.beacons" : "devices.gps";
-
-    const devCheck = await client.query(
-      `SELECT id FROM ${table} WHERE device_id = $1 AND org_id = $2 LIMIT 1`,
-      [deviceId, Number(orgId)]
-    );
-
-    if (!devCheck.rows.length) {
-      await client.query("ROLLBACK");
-      res.status(404).json({ success: false, message: "Device not found or not allocated to this organization" });
-      return;
-    }
-
-    const deviceDbId = devCheck.rows[0].id;
-
-    await client.query(
-      `UPDATE ${table} SET assigned_to = $1, assigned_type = $2, synced_at = NOW() WHERE id = $3`,
-      [String(entityId), entityType, deviceDbId]
-    );
-
-    if (entityType === "staff") {
-      await client.query(
-        `UPDATE institute.institute_employees SET beacon_id = $1, updated_at = NOW() WHERE id = $2 AND org_id = $3`,
-        [deviceId, Number(entityId), orgId]
+      const devCheck = await client.query(
+        `SELECT * FROM ${devTable} WHERE device_id = $1 AND org_id = $2 LIMIT 1`,
+        [deviceId, Number(orgId)]
       );
-    } else if (entityType === "driver") {
-      await client.query(
-        `UPDATE institute.institute_drivers SET beacon_id = $1, updated_at = NOW() WHERE id = $2 AND org_id = $3`,
-        [deviceId, Number(entityId), orgId]
-      );
-    } else if (entityType === "vehicle") {
-      if (deviceType === "gps") {
+
+      if (!devCheck.rows.length) {
+        throw new Error("Device not found");
+      }
+
+      const deviceData = devCheck.rows[0];
+
+      if (deviceType === "beacon") {
         await client.query(
-          `UPDATE institute.institute_vehicles SET gps_device_id = $1, updated_at = NOW() WHERE id = $2 AND org_id = $3`,
-          [deviceId, Number(entityId), orgId]
+          `INSERT INTO institute.institute_beacon (
+            id, device_id, sequence_id, allocated_to_org, status, device_type,
+            manufactured_at, manufactured_by, warranty_years, warranty_expiry,
+            battery_level, battery_status, battery_type, expected_battery_life_days,
+            device_health, is_active, created_at, assigned_to, assigned_type, synced_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, NOW())
+          ON CONFLICT (id) DO UPDATE SET
+            assigned_to = EXCLUDED.assigned_to,
+            assigned_type = EXCLUDED.assigned_type,
+            synced_at = NOW()`,
+          [
+            deviceData.id, deviceData.device_id, deviceData.sequence_id, Number(orgId), deviceData.status, deviceData.device_type,
+            deviceData.manufactured_at, deviceData.manufactured_by, deviceData.warranty_years, deviceData.warranty_expiry,
+            deviceData.battery_level, deviceData.battery_status, deviceData.battery_type, deviceData.expected_battery_life_days,
+            deviceData.device_health, deviceData.is_active, deviceData.created_at, String(entityId), entityType
+          ]
         );
       } else {
+        const assignedLocation = generateUniqueLocation(deviceData.last_known_location);
         await client.query(
-          `UPDATE institute.institute_vehicles SET beacon_count = COALESCE(beacon_count, 0) + 1, updated_at = NOW() WHERE id = $2 AND org_id = $3`,
-          [deviceId, Number(entityId), orgId]
+          `INSERT INTO institute.institute_gps (
+            id, device_id, sim_number, network_provider, device_health, status,
+            allocated_to_org, is_active, last_known_location, last_ping,
+            assigned_to, assigned_type, synced_at
+          ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
+          ON CONFLICT (id) DO UPDATE SET
+            assigned_to = EXCLUDED.assigned_to,
+            assigned_type = EXCLUDED.assigned_type,
+            last_known_location = EXCLUDED.last_known_location,
+            synced_at = NOW()`,
+          [
+            deviceData.id, deviceData.device_id, deviceData.sim_number, deviceData.network_provider, deviceData.device_health, deviceData.status,
+            Number(orgId), deviceData.is_active, assignedLocation, deviceData.last_ping || new Date().toISOString(),
+            String(entityId), entityType
+          ]
         );
       }
-    }
 
-    await client.query("COMMIT");
+      if (entityType === "staff") {
+        await client.query(
+          `UPDATE institute.institute_employees SET beacon_id = $1, updated_at = NOW() WHERE id = $2 AND org_id = $3`,
+          [deviceId, Number(entityId), orgId]
+        );
+      } else if (entityType === "driver") {
+        await client.query(
+          `UPDATE institute.institute_drivers SET beacon_id = $1, updated_at = NOW() WHERE id = $2 AND org_id = $3`,
+          [deviceId, Number(entityId), orgId]
+        );
+      } else if (entityType === "vehicle") {
+        if (deviceType === "gps") {
+          await client.query(
+            `UPDATE institute.institute_vehicles SET gps_device_id = $1, updated_at = NOW() WHERE id = $2 AND org_id = $3`,
+            [deviceId, Number(entityId), orgId]
+          );
+        } else {
+          await client.query(
+            `UPDATE institute.institute_vehicles SET beacon_count = COALESCE(beacon_count, 0) + 1, updated_at = NOW() WHERE id = $1 AND org_id = $2`,
+            [Number(entityId), orgId]
+          );
+        }
+      }
+    });
+
     res.json({ success: true, message: "Device assigned successfully" });
-  } catch (err) {
-    await client.query("ROLLBACK");
+  } catch (err: any) {
     console.error("Assign device error:", err);
-    res.status(500).json({ success: false, message: "Failed to assign device" });
-  } finally {
-    client.release();
+    if (err.message === "Device not found") {
+      res.status(404).json({ success: false, message: "Device not found or not allocated to this organization" });
+    } else {
+      res.status(500).json({ success: false, message: "Failed to assign device" });
+    }
   }
 });
 
@@ -1417,65 +2074,63 @@ app.post("/api/devices/unassign", async (req: Request, res: Response) => {
     return;
   }
 
-  const client = await pool.connect();
   try {
-    await client.query("BEGIN");
+    await withTransaction("POST /api/devices/unassign", orgId, async (client) => {
+      const instTable = deviceType === "beacon" ? "institute.institute_beacon" : "institute.institute_gps";
 
-    const table = deviceType === "beacon" ? "devices.beacons" : "devices.gps";
+      const devCheck = await client.query(
+        `SELECT id, assigned_to, assigned_type FROM ${instTable} WHERE device_id = $1 AND allocated_to_org = $2 LIMIT 1`,
+        [deviceId, Number(orgId)]
+      );
 
-    const devCheck = await client.query(
-      `SELECT id, assigned_to, assigned_type FROM ${table} WHERE device_id = $1 AND org_id = $2 LIMIT 1`,
-      [deviceId, Number(orgId)]
-    );
+      if (!devCheck.rows.length) {
+        throw new Error("Device not found");
+      }
 
-    if (!devCheck.rows.length) {
-      await client.query("ROLLBACK");
-      res.status(404).json({ success: false, message: "Device not found" });
-      return;
-    }
+      const { assigned_to, assigned_type } = devCheck.rows[0];
 
-    const { assigned_to, assigned_type } = devCheck.rows[0];
+      // Delete from institute table
+      await client.query(
+        `DELETE FROM ${instTable} WHERE device_id = $1 AND allocated_to_org = $2`,
+        [deviceId, Number(orgId)]
+      );
 
-    await client.query(
-      `UPDATE ${table} SET assigned_to = NULL, assigned_type = NULL, synced_at = NOW() WHERE device_id = $1`,
-      [deviceId]
-    );
-
-    if (assigned_to && assigned_type) {
-      const entityId = Number(assigned_to);
-      if (assigned_type === "staff") {
-        await client.query(
-          `UPDATE institute.institute_employees SET beacon_id = NULL, updated_at = NOW() WHERE id = $1 AND org_id = $2`,
-          [entityId, orgId]
-        );
-      } else if (assigned_type === "driver") {
-        await client.query(
-          `UPDATE institute.institute_drivers SET beacon_id = NULL, updated_at = NOW() WHERE id = $1 AND org_id = $2`,
-          [entityId, orgId]
-        );
-      } else if (assigned_type === "vehicle") {
-        if (deviceType === "gps") {
+      if (assigned_to && assigned_type) {
+        const entityId = Number(assigned_to);
+        if (assigned_type === "staff") {
           await client.query(
-            `UPDATE institute.institute_vehicles SET gps_device_id = NULL, updated_at = NOW() WHERE id = $1 AND org_id = $2`,
+            `UPDATE institute.institute_employees SET beacon_id = NULL, updated_at = NOW() WHERE id = $1 AND org_id = $2`,
             [entityId, orgId]
           );
-        } else {
+        } else if (assigned_type === "driver") {
           await client.query(
-            `UPDATE institute.institute_vehicles SET beacon_count = GREATEST(COALESCE(beacon_count, 1) - 1, 0), updated_at = NOW() WHERE id = $1 AND org_id = $2`,
+            `UPDATE institute.institute_drivers SET beacon_id = NULL, updated_at = NOW() WHERE id = $1 AND org_id = $2`,
             [entityId, orgId]
           );
+        } else if (assigned_type === "vehicle") {
+          if (deviceType === "gps") {
+            await client.query(
+              `UPDATE institute.institute_vehicles SET gps_device_id = NULL, updated_at = NOW() WHERE id = $1 AND org_id = $2`,
+              [entityId, orgId]
+            );
+          } else {
+            await client.query(
+              `UPDATE institute.institute_vehicles SET beacon_count = GREATEST(COALESCE(beacon_count, 1) - 1, 0), updated_at = NOW() WHERE id = $1 AND org_id = $2`,
+              [entityId, orgId]
+            );
+          }
         }
       }
-    }
+    });
 
-    await client.query("COMMIT");
     res.json({ success: true, message: "Device unassigned successfully" });
-  } catch (err) {
-    await client.query("ROLLBACK");
+  } catch (err: any) {
     console.error("Unassign device error:", err);
-    res.status(500).json({ success: false, message: "Failed to unassign device" });
-  } finally {
-    client.release();
+    if (err.message === "Device not found") {
+      res.status(404).json({ success: false, message: "Device not found" });
+    } else {
+      res.status(500).json({ success: false, message: "Failed to unassign device" });
+    }
   }
 });
 
@@ -1485,13 +2140,18 @@ app.get("/api/gps-device/for/dropdown", async (req: Request, res: Response) => {
     res.status(401).json({ message: "Unauthorized" });
     return;
   }
+  const current = String(req.query.current || "").trim();
   try {
     const result = await pool.query(
-      `SELECT id, device_id 
-       FROM devices.gps 
-       WHERE org_id = $1 AND assigned_to IS NULL 
-       ORDER BY device_id ASC`,
-      [Number(orgId)]
+      `SELECT d.id, d.device_id 
+       FROM devices.gps d
+       LEFT JOIN institute.institute_gps i ON d.device_id = i.device_id AND i.allocated_to_org = d.org_id
+       WHERE d.org_id = $1 AND (
+         i.assigned_to IS NULL
+         OR ($2 <> '' AND d.device_id = $2)
+       )
+       ORDER BY d.device_id ASC`,
+      [Number(orgId), current]
     );
     res.json(result.rows.map(row => ({
       id: row.id,
@@ -1510,13 +2170,18 @@ app.get("/api/beacon-device/for/dropdown", async (req: Request, res: Response) =
     res.status(401).json({ message: "Unauthorized" });
     return;
   }
+  const current = String(req.query.current || "").trim();
   try {
     const result = await pool.query(
-      `SELECT id, device_id 
-       FROM devices.beacons 
-       WHERE org_id = $1 AND assigned_to IS NULL 
-       ORDER BY device_id ASC`,
-      [Number(orgId)]
+      `SELECT d.id, d.device_id 
+       FROM devices.beacons d
+       LEFT JOIN institute.institute_beacon i ON d.device_id = i.device_id AND i.allocated_to_org = d.org_id
+       WHERE d.org_id = $1 AND (
+         i.assigned_to IS NULL
+         OR ($2 <> '' AND d.device_id = $2)
+       )
+       ORDER BY d.device_id ASC`,
+      [Number(orgId), current]
     );
     res.json(result.rows.map(row => ({
       id: row.id,
@@ -1539,7 +2204,10 @@ app.get("/api/active-vehicles/for/dropdown", async (req: Request, res: Response)
   try {
     const rows = await fetchRowsWithOrgFallback(VEHICLE_TABLE, orgId);
     const active = rows
-      .filter((row: any) => String(row.status || "active").toLowerCase() === "active")
+      .filter((row: any) => {
+        const statusStr = String(row.status || "").toLowerCase();
+        return !statusStr || statusStr.includes("active") || statusStr.includes("enabled");
+      })
       .map((row: any) => ({
         id: row.id,
         vehicle_number: row.vehicle_number,
@@ -1565,14 +2233,20 @@ app.delete("/api/drivers/:id", async (req: Request, res: Response) => {
   }
 
   try {
-    const result = await pool.query(`DELETE FROM ${DRIVER_TABLE} WHERE org_id = $1 AND id = $2`, [orgId, id]);
-    if (!result.rowCount) {
-      res.status(404).json({ success: false, message: "Driver not found" });
-      return;
-    }
+    await withTransaction("DELETE /api/drivers/:id", orgId, async (client) => {
+      const result = await client.query(`DELETE FROM ${DRIVER_TABLE} WHERE org_id = $1 AND id = $2`, [orgId, id]);
+      if (!result.rowCount) {
+        throw new Error("Driver not found");
+      }
+    });
     res.json({ success: true, message: "Driver deleted successfully" });
-  } catch {
-    res.status(500).json({ success: false, message: "Failed to delete driver" });
+  } catch (e: any) {
+    console.error("Delete driver error:", e);
+    if (e.message === "Driver not found") {
+      res.status(404).json({ success: false, message: "Driver not found" });
+    } else {
+      res.status(500).json({ success: false, message: "Failed to delete driver" });
+    }
   }
 });
 
@@ -1594,15 +2268,23 @@ app.get("/api/roles", async (req: Request, res: Response) => {
   }
 
   try {
-    const result = await pool.query(
-      `SELECT id, org_id, name, description, created_at, updated_at,
-       jsonb_array_length(COALESCE(permissions, '[]'::jsonb)) as permissions_count
-       FROM ${ROLE_TABLE} 
-       WHERE org_id = $1 
-       ORDER BY id DESC`,
-      [orgId]
-    );
-    res.json({ success: true, data: result.rows });
+    const roles = await withTransaction("GET /api/roles", orgId, async (client) => {
+      const result = await client.query(
+        `SELECT r.id, r.org_id, r.name, r.description, r.department, r.access_level, r.status, r.created_by, r.permissions, r.created_at, r.updated_at,
+         jsonb_array_length(COALESCE(r.permissions, '[]'::jsonb)) as permissions_count,
+         (SELECT COUNT(*)::int FROM institute.institute_employees WHERE org_id = $1 AND roles::jsonb @> JSONB_BUILD_ARRAY(r.name)) as assigned_users
+         FROM ${ROLE_TABLE} r
+         WHERE r.org_id = $1 
+         ORDER BY r.id DESC`,
+        [orgId]
+      );
+      return result.rows.map(r => {
+        const pNames = Array.isArray(r.permissions) ? r.permissions : [];
+        r.permissions = AVAILABLE_PERMISSIONS.filter(p => pNames.includes(p.name));
+        return r;
+      });
+    });
+    res.json({ success: true, data: roles });
   } catch (err) {
     console.error("Fetch roles error:", err);
     res.json({ success: true, data: [] });
@@ -1618,6 +2300,10 @@ app.post("/api/roles", async (req: Request, res: Response) => {
 
   const name = String(req.body?.name || "").trim();
   const description = req.body?.description ? String(req.body.description) : null;
+  const department = req.body?.department ? String(req.body.department).trim() : null;
+  const access_level = req.body?.access_level ? String(req.body.access_level).trim() : null;
+  const status = req.body?.status ? String(req.body.status).trim() : "Active";
+  const created_by = req.body?.created_by ? String(req.body.created_by).trim() : "Admin User";
   const pIds = Array.isArray(req.body?.permissions) ? req.body.permissions : [];
   
   // Convert IDs from frontend to human-readable string names for the DB
@@ -1629,18 +2315,26 @@ app.post("/api/roles", async (req: Request, res: Response) => {
   }
 
   try {
-    const roleResult = await pool.query(
-      `INSERT INTO ${ROLE_TABLE} (org_id, name, description, permissions) VALUES ($1, $2, $3, $4) RETURNING id, org_id, name, description, created_at, updated_at`,
-      [orgId, name, description, JSON.stringify(permissionNames)]
-    );
-    res.status(201).json({ success: true, data: roleResult.rows[0], message: "Role created successfully" });
+    const newRole = await withTransaction("POST /api/roles", orgId, async (client) => {
+      const roleResult = await client.query(
+        `INSERT INTO ${ROLE_TABLE} (org_id, name, description, department, access_level, status, created_by, permissions) 
+         VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+         RETURNING id, org_id, name, description, department, access_level, status, created_by, permissions, created_at, updated_at`,
+        [orgId, name, description, department, access_level, status, created_by, JSON.stringify(permissionNames)]
+      );
+      const r = roleResult.rows[0];
+      const pNames = Array.isArray(r.permissions) ? r.permissions : [];
+      r.permissions = AVAILABLE_PERMISSIONS.filter(p => pNames.includes(p.name));
+      return r;
+    });
+    res.status(201).json({ success: true, data: newRole, message: "Role created successfully" });
   } catch (e: any) {
     if (e?.code === "23505") {
       res.status(409).json({ success: false, message: "Role already exists" });
       return;
     }
     console.error("Create role error:", e);
-    res.status(500).json({ success: false, message: "Failed to create role" });
+    console.error(e); // Temporary raw stack trace log
   }
 });
 
@@ -1658,26 +2352,34 @@ app.get("/api/roles/:id", async (req: Request, res: Response) => {
   }
 
   try {
-    const roleResult = await pool.query(
-      `SELECT id, org_id, name, description, permissions, created_at, updated_at FROM ${ROLE_TABLE} WHERE org_id = $1 AND id = $2 LIMIT 1`,
-      [orgId, roleId]
-    );
+    const role = await withTransaction("GET /api/roles/:id", orgId, async (client) => {
+      const roleResult = await client.query(
+        `SELECT id, org_id, name, description, department, access_level, status, created_by, permissions, created_at, updated_at 
+         FROM ${ROLE_TABLE} 
+         WHERE org_id = $1 AND id = $2 LIMIT 1`,
+        [orgId, roleId]
+      );
 
-    if (!roleResult.rows.length) {
-      res.status(404).json({ success: false, message: "Role not found" });
-      return;
-    }
+      if (!roleResult.rows.length) {
+        throw new Error("Role not found");
+      }
 
-    const role = roleResult.rows[0];
-    const pNames = Array.isArray(role.permissions) ? role.permissions : [];
-    
-    // the frontend expects objects for permissions property (so map string names back to full objects)
-    role.permissions = AVAILABLE_PERMISSIONS.filter(p => pNames.includes(p.name));
+      const r = roleResult.rows[0];
+      const pNames = Array.isArray(r.permissions) ? r.permissions : [];
+      
+      // the frontend expects objects for permissions property (so map string names back to full objects)
+      r.permissions = AVAILABLE_PERMISSIONS.filter(p => pNames.includes(p.name));
+      return r;
+    });
 
     res.json({ success: true, data: role });
-  } catch (err) {
+  } catch (err: any) {
     console.error("Fetch role detail error:", err);
-    res.status(500).json({ success: false, message: "Failed to fetch role" });
+    if (err.message === "Role not found") {
+      res.status(404).json({ success: false, message: "Role not found" });
+    } else {
+      res.status(500).json({ success: false, message: "Failed to fetch role" });
+    }
   }
 });
 
@@ -1691,6 +2393,9 @@ app.put("/api/roles/:id", async (req: Request, res: Response) => {
   const roleId = Number(req.params.id);
   const name = req.body?.name ? String(req.body.name).trim() : null;
   const description = req.body?.description !== undefined ? String(req.body.description || null) : null;
+  const department = req.body?.department !== undefined ? String(req.body.department || null) : undefined;
+  const access_level = req.body?.access_level !== undefined ? String(req.body.access_level || null) : undefined;
+  const status = req.body?.status !== undefined ? String(req.body.status || null) : undefined;
   const pIds = Array.isArray(req.body?.permissions) ? req.body.permissions : null;
   
   // Convert IDs to strings for the DB if permissions are being updated
@@ -1704,32 +2409,56 @@ app.put("/api/roles/:id", async (req: Request, res: Response) => {
   }
 
   try {
-    let query = `UPDATE ${ROLE_TABLE} SET name = COALESCE($3, name), updated_at = NOW()`;
-    const params: any[] = [orgId, roleId, name];
+    const updatedRole = await withTransaction("PUT /api/roles/:id", orgId, async (client) => {
+      let query = `UPDATE ${ROLE_TABLE} SET name = COALESCE($3, name), updated_at = NOW()`;
+      const params: any[] = [orgId, roleId, name];
 
-    if (description !== null) {
-      params.push(description);
-      query += `, description = $${params.length}`;
-    }
+      if (description !== null) {
+        params.push(description);
+        query += `, description = $${params.length}`;
+      }
 
-    if (permissionNames !== null) {
-      params.push(JSON.stringify(permissionNames));
-      query += `, permissions = $${params.length}`;
-    }
+      if (department !== undefined) {
+        params.push(department);
+        query += `, department = $${params.length}`;
+      }
 
-    query += ` WHERE org_id = $1 AND id = $2 RETURNING id, org_id, name, description, created_at, updated_at`;
+      if (access_level !== undefined) {
+        params.push(access_level);
+        query += `, access_level = $${params.length}`;
+      }
 
-    const updateResult = await pool.query(query, params);
+      if (status !== undefined) {
+        params.push(status);
+        query += `, status = $${params.length}`;
+      }
 
-    if (!updateResult.rows.length) {
-      res.status(404).json({ success: false, message: "Role not found" });
-      return;
-    }
+      if (permissionNames !== null) {
+        params.push(JSON.stringify(permissionNames));
+        query += `, permissions = $${params.length}`;
+      }
 
-    res.json({ success: true, data: updateResult.rows[0], message: "Role updated successfully" });
-  } catch (err) {
+      query += ` WHERE org_id = $1 AND id = $2 RETURNING id, org_id, name, description, department, access_level, status, created_by, permissions, created_at, updated_at`;
+
+      const updateResult = await client.query(query, params);
+
+      if (!updateResult.rows.length) {
+        throw new Error("Role not found");
+      }
+      const r = updateResult.rows[0];
+      const pNames = Array.isArray(r.permissions) ? r.permissions : [];
+      r.permissions = AVAILABLE_PERMISSIONS.filter(p => pNames.includes(p.name));
+      return r;
+    });
+
+    res.json({ success: true, data: updatedRole, message: "Role updated successfully" });
+  } catch (err: any) {
     console.error("Update role error:", err);
-    res.status(500).json({ success: false, message: "Failed to update role" });
+    if (err.message === "Role not found") {
+      res.status(404).json({ success: false, message: "Role not found" });
+    } else {
+      res.status(500).json({ success: false, message: "Failed to update role" });
+    }
   }
 });
 
@@ -1747,14 +2476,20 @@ app.delete("/api/roles/:id", async (req: Request, res: Response) => {
   }
 
   try {
-    const result = await pool.query(`DELETE FROM ${ROLE_TABLE} WHERE org_id = $1 AND id = $2`, [orgId, roleId]);
-    if (!result.rowCount) {
-      res.status(404).json({ success: false, message: "Role not found" });
-      return;
-    }
+    await withTransaction("DELETE /api/roles/:id", orgId, async (client) => {
+      const result = await client.query(`DELETE FROM ${ROLE_TABLE} WHERE org_id = $1 AND id = $2`, [orgId, roleId]);
+      if (!result.rowCount) {
+        throw new Error("Role not found");
+      }
+    });
     res.json({ success: true, message: "Role deleted successfully" });
-  } catch {
-    res.status(500).json({ success: false, message: "Failed to delete role" });
+  } catch (e: any) {
+    console.error("Delete role error:", e);
+    if (e.message === "Role not found") {
+      res.status(404).json({ success: false, message: "Role not found" });
+    } else {
+      res.status(500).json({ success: false, message: "Failed to delete role" });
+    }
   }
 });
 
@@ -1819,15 +2554,18 @@ app.get("/api/compliance", async (req: Request, res: Response) => {
   const { page, perPage, offset } = getPagination(req);
 
   try {
-    const totalResult = await pool.query(`SELECT COUNT(*) as count FROM ${COMPLIANCE_TABLE} WHERE org_id = $1`, [orgId]);
-    const total = parseInt(totalResult.rows[0].count);
+    const result = await withTransaction("GET /api/compliance", orgId, async (client) => {
+      const totalResult = await client.query(`SELECT COUNT(*) as count FROM ${COMPLIANCE_TABLE} WHERE org_id = $1`, [orgId]);
+      const total = parseInt(totalResult.rows[0].count);
 
-    const rows = await pool.query(
-      `SELECT * FROM ${COMPLIANCE_TABLE} WHERE org_id = $1 ORDER BY id DESC LIMIT $2 OFFSET $3`,
-      [orgId, perPage, offset]
-    );
+      const rows = await client.query(
+        `SELECT * FROM ${COMPLIANCE_TABLE} WHERE org_id = $1 ORDER BY id DESC LIMIT $2 OFFSET $3`,
+        [orgId, perPage, offset]
+      );
+      return { total, rows: rows.rows };
+    });
 
-    res.json(paginatedPayload(rows.rows, page, perPage, total));
+    res.json(paginatedPayload(result.rows, page, perPage, result.total));
   } catch (e: any) {
     res.status(500).json({ success: false, message: e.message });
   }
@@ -1841,12 +2579,16 @@ app.get("/api/compliance/:id", async (req: Request, res: Response) => {
   }
 
   try {
-    const result = await pool.query(`SELECT * FROM ${COMPLIANCE_TABLE} WHERE org_id = $1 AND id = $2`, [orgId, req.params.id]);
-    if (!result.rowCount) {
+    const result = await withTransaction("GET /api/compliance/:id", orgId, async (client) => {
+      const res = await client.query(`SELECT * FROM ${COMPLIANCE_TABLE} WHERE org_id = $1 AND id = $2`, [orgId, req.params.id]);
+      return res.rows[0] || null;
+    });
+
+    if (!result) {
       res.status(404).json({ success: false, message: "Compliance record not found" });
       return;
     }
-    res.json({ success: true, data: result.rows[0] });
+    res.json({ success: true, data: result });
   } catch (e: any) {
     res.status(500).json({ success: false, message: e.message });
   }
@@ -1859,30 +2601,34 @@ app.post("/api/compliance", upload.any(), async (req: Request, res: Response) =>
     return;
   }
 
-  const columns = await getTableColumns(COMPLIANCE_TABLE);
-  const payload: any = { org_id: orgId };
-
-  Object.keys(req.body).forEach(key => {
-    if (columns.has(key)) {
-      payload[key] = req.body[key];
-    }
-  });
-
-  // Handle files (Azure Blob Storage)
-  await processFiles(req.files, columns, payload);
-
   try {
-    const keys = Object.keys(payload);
-    const values = Object.values(payload);
-    const placeholders = keys.map((_, i) => `$${i + 1}`).join(", ");
+    const newCompliance = await withTransaction("POST /api/compliance", orgId, async (client) => {
+      const columns = await getTableColumns(COMPLIANCE_TABLE);
+      const payload: any = { org_id: orgId };
 
-    const result = await pool.query(
-      `INSERT INTO ${COMPLIANCE_TABLE} (${keys.join(", ")}) VALUES (${placeholders}) RETURNING *`,
-      values
-    );
+      Object.keys(req.body).forEach(key => {
+        if (columns.has(key)) {
+          payload[key] = req.body[key];
+        }
+      });
 
-    res.status(201).json({ success: true, data: result.rows[0], message: "Compliance record created" });
+      // Handle files (Azure Blob Storage)
+      await processFiles(req.files, columns, payload);
+
+      const keys = Object.keys(payload);
+      const values = Object.values(payload);
+      const placeholders = keys.map((_, i) => `$${i + 1}`).join(", ");
+
+      const result = await client.query(
+        `INSERT INTO ${COMPLIANCE_TABLE} (${keys.join(", ")}) VALUES (${placeholders}) RETURNING *`,
+        values
+      );
+      return result.rows[0];
+    });
+
+    res.status(201).json({ success: true, data: newCompliance, message: "Compliance record created" });
   } catch (e: any) {
+    console.error("Create compliance error:", e);
     res.status(500).json({ success: false, message: e.message });
   }
 });
@@ -1895,36 +2641,43 @@ app.put("/api/compliance/:id", upload.any(), async (req: Request, res: Response)
   }
 
   const id = req.params.id;
-  const columns = await getTableColumns(COMPLIANCE_TABLE);
-  const payload: any = { updated_at: new Date() };
-
-  Object.keys(req.body).forEach(key => {
-    if (columns.has(key)) {
-      payload[key] = req.body[key];
-    }
-  });
-
-  // Handle files (Azure Blob Storage)
-  await processFiles(req.files, columns, payload);
-
   try {
-    const keys = Object.keys(payload);
-    const values = Object.values(payload);
-    const setClause = keys.map((key, i) => `${key} = $${i + 3}`).join(", ");
+    const updatedCompliance = await withTransaction("PUT /api/compliance/:id", orgId, async (client) => {
+      const columns = await getTableColumns(COMPLIANCE_TABLE);
+      const payload: any = { updated_at: new Date() };
 
-    const result = await pool.query(
-      `UPDATE ${COMPLIANCE_TABLE} SET ${setClause} WHERE id = $1 AND org_id = $2 RETURNING *`,
-      [id, orgId, ...values]
-    );
+      Object.keys(req.body).forEach(key => {
+        if (columns.has(key)) {
+          payload[key] = req.body[key];
+        }
+      });
 
-    if (!result.rowCount) {
-      res.status(404).json({ success: false, message: "Record not found" });
-      return;
-    }
+      // Handle files (Azure Blob Storage)
+      await processFiles(req.files, columns, payload);
 
-    res.json({ success: true, data: result.rows[0], message: "Compliance record updated" });
+      const keys = Object.keys(payload);
+      const values = Object.values(payload);
+      const setClause = keys.map((key, i) => `${key} = $${i + 3}`).join(", ");
+
+      const result = await client.query(
+        `UPDATE ${COMPLIANCE_TABLE} SET ${setClause} WHERE id = $1 AND org_id = $2 RETURNING *`,
+        [id, orgId, ...values]
+      );
+
+      if (!result.rowCount) {
+        throw new Error("Record not found");
+      }
+      return result.rows[0];
+    });
+
+    res.json({ success: true, data: updatedCompliance, message: "Compliance record updated" });
   } catch (e: any) {
-    res.status(500).json({ success: false, message: e.message });
+    console.error("Update compliance error:", e);
+    if (e.message === "Record not found") {
+      res.status(404).json({ success: false, message: "Record not found" });
+    } else {
+      res.status(500).json({ success: false, message: e.message });
+    }
   }
 });
 
@@ -1936,14 +2689,20 @@ app.delete("/api/compliance/:id", async (req: Request, res: Response) => {
   }
 
   try {
-    const result = await pool.query(`DELETE FROM ${COMPLIANCE_TABLE} WHERE id = $1 AND org_id = $2`, [req.params.id, orgId]);
-    if (!result.rowCount) {
-      res.status(404).json({ success: false, message: "Record not found" });
-      return;
-    }
+    await withTransaction("DELETE /api/compliance/:id", orgId, async (client) => {
+      const result = await client.query(`DELETE FROM ${COMPLIANCE_TABLE} WHERE id = $1 AND org_id = $2`, [req.params.id, orgId]);
+      if (!result.rowCount) {
+        throw new Error("Record not found");
+      }
+    });
     res.json({ success: true, message: "Record deleted" });
   } catch (e: any) {
-    res.status(500).json({ success: false, message: e.message });
+    console.error("Delete compliance error:", e);
+    if (e.message === "Record not found") {
+      res.status(404).json({ success: false, message: "Record not found" });
+    } else {
+      res.status(500).json({ success: false, message: e.message });
+    }
   }
 });
 
@@ -1958,53 +2717,74 @@ app.get("/api/organization/me", async (req: Request, res: Response) => {
     return;
   }
 
-  const client = await pool.connect();
   try {
-    // 1. Fetch basic org info
-    console.log(`[DEBUG] Querying organizations for id: ${orgId}`);
-    let orgRes = await client.query("SELECT * FROM organizations WHERE id::text = $1", [String(orgId)]);
-    
-    // Fallback: If not found, try to get the first one (helpful for superadmins or dev mode)
-    if (orgRes.rows.length === 0) {
-      console.log(`[DEBUG] Org ${orgId} not found. Falling back to first available organization.`);
-      orgRes = await client.query("SELECT * FROM organizations ORDER BY id ASC LIMIT 1");
-    }
+    const org = await withTransaction("GET /api/organization/me", orgId, async (client) => {
+      // 1. Fetch basic org info
+      console.log(`[DEBUG] Querying organizations for id: ${orgId}`);
+      let orgRes = await client.query("SELECT * FROM organizations WHERE id::text = $1", [String(orgId)]);
+      
+      // Fallback 1: If not found, try to get the first one (helpful for superadmins or dev mode)
+      if (orgRes.rows.length === 0) {
+        console.log(`[DEBUG] Org ${orgId} not found. Falling back to first available organization.`);
+        orgRes = await client.query("SELECT * FROM organizations ORDER BY id ASC LIMIT 1");
+      }
 
-    if (orgRes.rows.length === 0) {
-      console.error(`[DEBUG] No organizations found in database even after fallback.`);
-      res.status(404).json({ message: "No organizations found in database" });
-      return;
-    }
-    const org = orgRes.rows[0];
-    const actualOrgId = org.id; 
-    console.log(`[DEBUG] Found organization: ${org.name} (ID: ${actualOrgId})`);
+      // Fallback 2: If still not found, dynamically seed a default organization ONLY if the table is completely empty
+      if (orgRes.rows.length === 0) {
+        const countRes = await client.query("SELECT COUNT(*) FROM organizations");
+        const count = parseInt(countRes.rows[0].count, 10);
+        if (count === 0) {
+          console.log(`[DEBUG] No organizations found in database. Seeding a default organization.`);
+          const seedId = isNaN(Number(orgId)) ? (orgId || "1") : orgId;
+          const insertRes = await client.query(
+            "INSERT INTO organizations (id, name, type, email, status) VALUES ($1, $2, $3, $4, $5) RETURNING *",
+            [seedId, "Default Organization", "institute", "admin@default.com", "active"]
+          );
+          orgRes = insertRes;
+          console.log(`[ORG-BOOTSTRAP] Default organization created`);
+        }
+      }
 
-    // 2. Fetch address
-    const addrRes = await client.query("SELECT * FROM organization_address WHERE org_id::text = $1", [String(actualOrgId)]);
-    org.address = addrRes.rows[0] || {};
-    console.log(`[DEBUG] Address rows: ${addrRes.rows.length}`);
+      if (orgRes.rows.length === 0) {
+        throw new Error("No organizations found in database");
+      }
+      
+      const orgData = orgRes.rows[0];
+      const actualOrgId = orgData.id;
+      console.log(`[DEBUG] Found organization: ${orgData.name} (ID: ${actualOrgId})`);
 
-    // 3. Fetch contacts
-    const contactRes = await client.query("SELECT * FROM organization_contacts WHERE org_id::text = $1", [String(actualOrgId)]);
-    org.contact = contactRes.rows[0] || {};
-    console.log(`[DEBUG] Contact rows: ${contactRes.rows.length}`);
+      // 2. Fetch address
+      const addrRes = await client.query("SELECT * FROM organization_address WHERE org_id::text = $1", [String(actualOrgId)]);
+      orgData.address = addrRes.rows[0] || {};
+      console.log(`[DEBUG] Address rows: ${addrRes.rows.length}`);
 
-    // 4. Fetch institute specific info
-    const instRes = await client.query("SELECT * FROM organization_institute WHERE org_id::text = $1", [String(actualOrgId)]);
-    org.institute = instRes.rows[0] || {};
-    console.log(`[DEBUG] Institute rows: ${instRes.rows.length}`);
+      // 3. Fetch contacts
+      const contactRes = await client.query("SELECT * FROM organization_contacts WHERE org_id::text = $1", [String(actualOrgId)]);
+      orgData.contact = contactRes.rows[0] || {};
+      console.log(`[DEBUG] Contact rows: ${contactRes.rows.length}`);
 
-    // 5. Fetch documents
-    const docRes = await client.query("SELECT * FROM organization_documents WHERE org_id::text = $1", [String(actualOrgId)]);
-    org.documents = docRes.rows[0] || {};
-    console.log(`[DEBUG] Documents rows: ${docRes.rows.length}`);
+      // 4. Fetch institute specific info
+      const instRes = await client.query("SELECT * FROM organization_institute WHERE org_id::text = $1", [String(actualOrgId)]);
+      orgData.institute = instRes.rows[0] || {};
+      console.log(`[DEBUG] Institute rows: ${instRes.rows.length}`);
+
+      // 5. Fetch documents
+      const docRes = await client.query("SELECT * FROM organization_documents WHERE org_id::text = $1", [String(actualOrgId)]);
+      orgData.documents = docRes.rows[0] || {};
+      console.log(`[DEBUG] Documents rows: ${docRes.rows.length}`);
+
+      return orgData;
+    });
 
     res.json({ success: true, data: org });
   } catch (err: any) {
     console.error("[DEBUG] Fetch org settings error:", err);
-    res.status(500).json({ success: false, message: "Failed to fetch organization details" });
-  } finally {
-    client.release();
+    console.error(err); // Temporary raw stack trace log
+    if (err.message === "No organizations found in database") {
+      res.status(404).json({ success: false, message: err.message });
+    } else {
+      res.status(500).json({ success: false, message: "Failed to fetch organization details" });
+    }
   }
 });
 
@@ -2022,120 +2802,115 @@ app.put("/api/organization/me", upload.any(), async (req: Request, res: Response
     "pan_card", "gst_cert", "registration_cert", "aadhaar_card", "bank_proof", 
     "contract_doc", "insurance_cert", "safety_sop", "additional_doc"
   ]);
-  const docPayload: any = documents ? (typeof documents === 'string' ? JSON.parse(documents) : documents) : {};
-  await processFiles(req.files, docColumns, docPayload);
-
-  const client = await pool.connect();
-
+  
   try {
-    await client.query("BEGIN");
+    const docPayload: any = documents ? (typeof documents === 'string' ? JSON.parse(documents) : documents) : {};
+    await processFiles(req.files, docColumns, docPayload);
 
-    // 1. Update basic org info (including Tax IDs)
-    // Map phone/email from contact if they are missing at top level
-    const parsedContact = typeof contact === 'string' ? JSON.parse(contact) : contact;
-    const finalPhone = phone || parsedContact?.primary_phone;
-    const finalEmail = email || parsedContact?.primary_email;
+    await withTransaction("PUT /api/organization/me", orgId, async (client) => {
+      // 1. Update basic org info (including Tax IDs)
+      // Map phone/email from contact if they are missing at top level
+      const parsedContact = typeof contact === 'string' ? JSON.parse(contact) : contact;
+      const finalPhone = phone || parsedContact?.primary_phone;
+      const finalEmail = email || parsedContact?.primary_email;
 
-    await client.query(
-      "UPDATE organizations SET name = $1, website = $2, phone = $3, email = $4, gst_number = $5, pan_number = $6 WHERE id::text = $7",
-      [name, website, finalPhone, finalEmail, gst_number, pan_number, String(orgId)]
-    );
-
-    // 2. Upsert address
-    if (address) {
-      const parsedAddress = typeof address === 'string' ? JSON.parse(address) : address;
       await client.query(
-        `INSERT INTO organization_address (org_id, address1, address2, city, district, pincode, state)
-         VALUES ($1, $2, $3, $4, $5, $6, $7)
-         ON CONFLICT (org_id) DO UPDATE SET
-         address1 = EXCLUDED.address1,
-         address2 = EXCLUDED.address2,
-         city = EXCLUDED.city,
-         district = EXCLUDED.district,
-         pincode = EXCLUDED.pincode,
-         state = EXCLUDED.state`,
-        [Number(orgId), parsedAddress.address1, parsedAddress.address2, parsedAddress.city, parsedAddress.district, parsedAddress.pincode, parsedAddress.state]
+        "UPDATE organizations SET name = $1, website = $2, phone = $3, email = $4, gst_number = $5, pan_number = $6 WHERE id::text = $7",
+        [name, website, finalPhone, finalEmail, gst_number, pan_number, String(orgId)]
       );
-    }
 
-    // 3. Upsert contact
-    if (parsedContact) {
-      await client.query(
-        `INSERT INTO organization_contacts (
-           org_id, primary_name, primary_phone, primary_email, 
-           secondary_name, secondary_phone, secondary_email,
-           emergency_name, emergency_phone
-         )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-         ON CONFLICT (org_id) DO UPDATE SET
-         primary_name = EXCLUDED.primary_name,
-         primary_phone = EXCLUDED.primary_phone,
-         primary_email = EXCLUDED.primary_email,
-         secondary_name = EXCLUDED.secondary_name,
-         secondary_phone = EXCLUDED.secondary_phone,
-         secondary_email = EXCLUDED.secondary_email,
-         emergency_name = EXCLUDED.emergency_name,
-         emergency_phone = EXCLUDED.emergency_phone`,
-        [
-          Number(orgId), 
-          parsedContact.primary_name, parsedContact.primary_phone, parsedContact.primary_email,
-          parsedContact.secondary_name, parsedContact.secondary_phone, parsedContact.secondary_email,
-          parsedContact.emergency_name, parsedContact.emergency_phone
-        ]
-      );
-    }
+      // 2. Upsert address
+      if (address) {
+        const parsedAddress = typeof address === 'string' ? JSON.parse(address) : address;
+        await client.query(
+          `INSERT INTO organization_address (org_id, address1, address2, city, district, pincode, state)
+           VALUES ($1, $2, $3, $4, $5, $6, $7)
+           ON CONFLICT (org_id) DO UPDATE SET
+           address1 = EXCLUDED.address1,
+           address2 = EXCLUDED.address2,
+           city = EXCLUDED.city,
+           district = EXCLUDED.district,
+           pincode = EXCLUDED.pincode,
+           state = EXCLUDED.state`,
+          [Number(orgId), parsedAddress.address1, parsedAddress.address2, parsedAddress.city, parsedAddress.district, parsedAddress.pincode, parsedAddress.state]
+        );
+      }
 
-    // 4. Upsert documents
-    if (docPayload && Object.keys(docPayload).length > 0) {
-      await client.query(
-        `INSERT INTO organization_documents (
-           org_id, pan_card, gst_cert, registration_cert, aadhaar_card, 
-           bank_proof, contract_doc, insurance_cert, safety_sop, additional_doc
-         )
-         VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-         ON CONFLICT (org_id) DO UPDATE SET
-         pan_card = EXCLUDED.pan_card,
-         gst_cert = EXCLUDED.gst_cert,
-         registration_cert = EXCLUDED.registration_cert,
-         aadhaar_card = EXCLUDED.aadhaar_card,
-         bank_proof = EXCLUDED.bank_proof,
-         contract_doc = EXCLUDED.contract_doc,
-         insurance_cert = EXCLUDED.insurance_cert,
-         safety_sop = EXCLUDED.safety_sop,
-         additional_doc = EXCLUDED.additional_doc`,
-        [
-          Number(orgId),
-          docPayload.pan_card || null, docPayload.gst_cert || null, docPayload.registration_cert || null, docPayload.aadhaar_card || null,
-          docPayload.bank_proof || null, docPayload.contract_doc || null, docPayload.insurance_cert || null, docPayload.safety_sop || null, docPayload.additional_doc || null
-        ]
-      );
-    }
+      // 3. Upsert contact
+      if (parsedContact) {
+        await client.query(
+          `INSERT INTO organization_contacts (
+             org_id, primary_name, primary_phone, primary_email, 
+             secondary_name, secondary_phone, secondary_email,
+             emergency_name, emergency_phone
+           )
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+           ON CONFLICT (org_id) DO UPDATE SET
+           primary_name = EXCLUDED.primary_name,
+           primary_phone = EXCLUDED.primary_phone,
+           primary_email = EXCLUDED.primary_email,
+           secondary_name = EXCLUDED.secondary_name,
+           secondary_phone = EXCLUDED.secondary_phone,
+           secondary_email = EXCLUDED.secondary_email,
+           emergency_name = EXCLUDED.emergency_name,
+           emergency_phone = EXCLUDED.emergency_phone`,
+          [
+            Number(orgId), 
+            parsedContact.primary_name, parsedContact.primary_phone, parsedContact.primary_email,
+            parsedContact.secondary_name, parsedContact.secondary_phone, parsedContact.secondary_email,
+            parsedContact.emergency_name, parsedContact.emergency_phone
+          ]
+        );
+      }
 
-    // 5. Upsert institute
-    const parsedInstitute = typeof institute === 'string' ? JSON.parse(institute) : institute;
-    if (parsedInstitute) {
-      const { institution_type, affiliation_board, udise_code, safety_officer_name, safety_officer_contact } = parsedInstitute;
-      await client.query(
-        `INSERT INTO organization_institute (org_id, institution_type, affiliation_board, udise_code, safety_officer_name, safety_officer_contact)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (org_id) DO UPDATE SET
-         institution_type = EXCLUDED.institution_type,
-         affiliation_board = EXCLUDED.affiliation_board,
-         udise_code = EXCLUDED.udise_code,
-         safety_officer_name = EXCLUDED.safety_officer_name,
-         safety_officer_contact = EXCLUDED.safety_officer_contact`,
-        [Number(orgId), institution_type, affiliation_board, udise_code, safety_officer_name, safety_officer_contact]
-      );
-    }
+      // 4. Upsert documents
+      if (docPayload && Object.keys(docPayload).length > 0) {
+        await client.query(
+          `INSERT INTO organization_documents (
+             org_id, pan_card, gst_cert, registration_cert, aadhaar_card, 
+             bank_proof, contract_doc, insurance_cert, safety_sop, additional_doc
+           )
+           VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+           ON CONFLICT (org_id) DO UPDATE SET
+           pan_card = EXCLUDED.pan_card,
+           gst_cert = EXCLUDED.gst_cert,
+           registration_cert = EXCLUDED.registration_cert,
+           aadhaar_card = EXCLUDED.aadhaar_card,
+           bank_proof = EXCLUDED.bank_proof,
+           contract_doc = EXCLUDED.contract_doc,
+           insurance_cert = EXCLUDED.insurance_cert,
+           safety_sop = EXCLUDED.safety_sop,
+           additional_doc = EXCLUDED.additional_doc`,
+          [
+            Number(orgId),
+            docPayload.pan_card || null, docPayload.gst_cert || null, docPayload.registration_cert || null, docPayload.aadhaar_card || null,
+            docPayload.bank_proof || null, docPayload.contract_doc || null, docPayload.insurance_cert || null, docPayload.safety_sop || null, docPayload.additional_doc || null
+          ]
+        );
+      }
 
-    await client.query("COMMIT");
+      // 5. Upsert institute
+      const parsedInstitute = typeof institute === 'string' ? JSON.parse(institute) : institute;
+      if (parsedInstitute) {
+        const { institution_type, affiliation_board, udise_code, safety_officer_name, safety_officer_contact } = parsedInstitute;
+        await client.query(
+          `INSERT INTO organization_institute (org_id, institution_type, affiliation_board, udise_code, safety_officer_name, safety_officer_contact)
+           VALUES ($1, $2, $3, $4, $5, $6)
+           ON CONFLICT (org_id) DO UPDATE SET
+           institution_type = EXCLUDED.institution_type,
+           affiliation_board = EXCLUDED.affiliation_board,
+           udise_code = EXCLUDED.udise_code,
+           safety_officer_name = EXCLUDED.safety_officer_name,
+           safety_officer_contact = EXCLUDED.safety_officer_contact`,
+          [Number(orgId), institution_type, affiliation_board, udise_code, safety_officer_name, safety_officer_contact]
+        );
+      }
+    });
+
     res.json({ success: true, message: "Organization updated successfully" });
   } catch (err: any) {
-    await client.query("ROLLBACK");
     console.error("Update org settings error:", err);
     res.status(500).json({ success: false, message: "Failed to update organization details" });
-  } finally {
-    client.release();
   }
 });
 
@@ -2205,60 +2980,142 @@ app.post("/api/broadcasts", async (req: Request, res: Response) => {
     return res.status(400).json({ success: false, message: "Missing required fields" });
   }
 
-  const client = await pool.connect();
   try {
-    // 0. Fetch Org Name
-    const orgRes = await client.query(`SELECT name FROM public.organizations WHERE id = $1`, [Number(orgId)]);
-    const senderName = orgRes.rows[0]?.name || "Institute Admin";
+    const resultData = await withTransaction("POST /api/broadcasts", orgId, async (client) => {
+      // 0. Fetch Org Name
+      const orgRes = await client.query(`SELECT name FROM organizations WHERE id::text = $1`, [String(orgId)]);
+      const senderName = orgRes.rows[0]?.name || "Institute Admin";
 
-    // 1. Resolve Recipients
-    let recipients: any[] = [];
-    if (recipient_ids && Array.isArray(recipient_ids)) {
-      for (const item of recipient_ids) {
-        const table = item.type === 'staff' ? 'institute.institute_employees' : 'institute.institute_drivers';
-        const phoneCol = item.type === 'staff' ? 'phone' : 'mobile_number as phone';
-        const rRes = await client.query(`SELECT id, first_name, last_name, email, ${phoneCol} FROM ${table} WHERE id = $1 AND org_id = $2 AND email IS NOT NULL`, [item.id, Number(orgId)]);
-        if (rRes.rows.length > 0) recipients.push({ ...rRes.rows[0], type: item.type === 'staff' ? 'employee' : 'driver' });
+      // 1. Resolve Recipients
+      let recipients: any[] = [];
+      if (recipient_ids && Array.isArray(recipient_ids)) {
+        for (const item of recipient_ids) {
+          const table = item.type === 'staff' ? 'institute.institute_employees' : 'institute.institute_drivers';
+          const phoneCol = item.type === 'staff' ? 'phone' : 'mobile_number as phone';
+          const rRes = await client.query(`SELECT id, first_name, last_name, email, ${phoneCol} FROM ${table} WHERE id = $1 AND org_id = $2 AND email IS NOT NULL`, [item.id, Number(orgId)]);
+          if (rRes.rows.length > 0) recipients.push({ ...rRes.rows[0], type: item.type === 'staff' ? 'employee' : 'driver' });
+        }
+      } else {
+        if (target_audience === "staff" || target_audience === "everyone") {
+          const r = await client.query(`SELECT id, first_name, last_name, email, phone FROM institute.institute_employees WHERE org_id = $1 AND email IS NOT NULL`, [Number(orgId)]);
+          recipients.push(...r.rows.map(x => ({ ...x, type: 'employee' })));
+        }
+        if (target_audience === "drivers" || target_audience === "everyone") {
+          const r = await client.query(`SELECT id, first_name, last_name, email, mobile_number as phone FROM institute.institute_drivers WHERE org_id = $1 AND email IS NOT NULL`, [Number(orgId)]);
+          recipients.push(...r.rows.map(x => ({ ...x, type: 'driver' })));
+        }
       }
+
+      if (recipients.length === 0) {
+        throw new Error("No recipients found");
+      }
+
+      // 2. Create Broadcast
+      const broadcastRes = await client.query(`
+        INSERT INTO institute.institute_broadcasts (org_id, target_audience, channel, subject, body, status, total_recipients)
+        VALUES ($1, $2, $3, $4, $5, 'sending', $6) RETURNING *
+      `, [Number(orgId), target_audience, channel, subject, messageBody, recipients.length]);
+      const broadcast = broadcastRes.rows[0];
+
+      // 3. Send
+      let delivered = 0;
+      for (const r of recipients) {
+        const emailRes = await sendEmail(r.email, subject, messageBody, senderName);
+        await client.query(`
+          INSERT INTO institute.institute_broadcast_recipients (broadcast_id, recipient_type, recipient_id, recipient_name, recipient_email, status, sent_at)
+          VALUES ($1, $2, $3, $4, $5, $6, NOW())
+        `, [broadcast.id, r.type, r.id, `${r.first_name} ${r.last_name}`, r.email, emailRes.success ? 'delivered' : 'failed']);
+        if (emailRes.success) delivered++;
+      }
+
+      await client.query(`UPDATE institute.institute_broadcasts SET status = 'sent', delivered_count = $1, sent_at = NOW() WHERE id = $2`, [delivered, broadcast.id]);
+      
+      return { ...broadcast, delivered_count: delivered, status: 'sent' };
+    });
+
+    res.json({ success: true, data: resultData });
+  } catch (err: any) {
+    console.error("Broadcast sending error:", err);
+    if (err.message === "No recipients found") {
+      res.status(400).json({ success: false, message: err.message });
     } else {
-      if (target_audience === "staff" || target_audience === "everyone") {
-        const r = await client.query(`SELECT id, first_name, last_name, email, phone FROM institute.institute_employees WHERE org_id = $1 AND email IS NOT NULL`, [Number(orgId)]);
-        recipients.push(...r.rows.map(x => ({ ...x, type: 'employee' })));
-      }
-      if (target_audience === "drivers" || target_audience === "everyone") {
-        const r = await client.query(`SELECT id, first_name, last_name, email, mobile_number as phone FROM institute.institute_drivers WHERE org_id = $1 AND email IS NOT NULL`, [Number(orgId)]);
-        recipients.push(...r.rows.map(x => ({ ...x, type: 'driver' })));
-      }
+      res.status(500).json({ success: false, message: "Failed to send broadcast" });
     }
+  }
+});
 
-    if (recipients.length === 0) return res.status(400).json({ success: false, message: "No recipients found" });
+app.post("/api/upload", upload.any(), async (req: Request, res: Response) => {
+  const orgId = getOrgIdFromRequest(req);
+  if (!orgId) return res.status(401).json({ message: "Unauthorized" });
 
-    // 2. Create Broadcast
-    const broadcastRes = await client.query(`
-      INSERT INTO institute.institute_broadcasts (org_id, target_audience, channel, subject, body, status, total_recipients)
-      VALUES ($1, $2, $3, $4, $5, 'sending', $6) RETURNING *
-    `, [Number(orgId), target_audience, channel, subject, messageBody, recipients.length]);
-    const broadcast = broadcastRes.rows[0];
+  const files = req.files as any[];
+  if (!files || files.length === 0) {
+    return res.status(400).json({ success: false, message: "No file uploaded" });
+  }
 
-    // 3. Send
-    let delivered = 0;
-    for (const r of recipients) {
-      const emailRes = await sendEmail(r.email, subject, messageBody, senderName);
-      await client.query(`
-        INSERT INTO institute.institute_broadcast_recipients (broadcast_id, recipient_type, recipient_id, recipient_name, recipient_email, status, sent_at)
-        VALUES ($1, $2, $3, $4, $5, $6, NOW())
-      `, [broadcast.id, r.type, r.id, `${r.first_name} ${r.last_name}`, r.email, emailRes.success ? 'delivered' : 'failed']);
-      if (emailRes.success) delivered++;
-    }
-
-    await client.query(`UPDATE institute.institute_broadcasts SET status = 'sent', delivered_count = $1, sent_at = NOW() WHERE id = $2`, [delivered, broadcast.id]);
-    
-    res.json({ success: true, data: { ...broadcast, delivered_count: delivered, status: 'sent' } });
+  try {
+    const file = files[0];
+    const url = await uploadToAzure(file.buffer, file.originalname, file.mimetype);
+    res.json({ success: true, url });
   } catch (err) {
-    console.error(err);
-    res.status(500).json({ success: false, message: "Failed to send broadcast" });
-  } finally {
-    client.release();
+    console.error("Upload to Azure failed:", err);
+    res.status(500).json({ success: false, message: "Upload failed" });
+  }
+});
+
+app.get("/api/ads", async (req: Request, res: Response) => {
+  const orgId = getOrgIdFromRequest(req);
+  if (!orgId) return res.status(401).json({ message: "Unauthorized" });
+
+  try {
+    const result = await pool.query(`
+      SELECT * FROM institute.institute_ads 
+      WHERE org_id = $1 
+      ORDER BY created_at DESC
+    `, [String(orgId)]);
+    res.json({ success: true, data: result.rows });
+  } catch (err) {
+    console.error("Failed to fetch ads:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+app.post("/api/ads", async (req: Request, res: Response) => {
+  const orgId = getOrgIdFromRequest(req);
+  if (!orgId) return res.status(401).json({ message: "Unauthorized" });
+
+  const { title, image, status } = req.body;
+  if (!title || !image) {
+    return res.status(400).json({ success: false, message: "Title and image are required" });
+  }
+
+  try {
+    const result = await pool.query(`
+      INSERT INTO institute.institute_ads (org_id, title, image, status)
+      VALUES ($1, $2, $3, $4)
+      RETURNING *
+    `, [String(orgId), title, image, status || 'Active']);
+    res.json({ success: true, data: result.rows[0] });
+  } catch (err) {
+    console.error("Failed to create ad:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
+  }
+});
+
+app.delete("/api/ads/:id", async (req: Request, res: Response) => {
+  const orgId = getOrgIdFromRequest(req);
+  if (!orgId) return res.status(401).json({ message: "Unauthorized" });
+
+  const { id } = req.params;
+  try {
+    await pool.query(`
+      DELETE FROM institute.institute_ads 
+      WHERE id = $1 AND org_id = $2
+    `, [Number(id), String(orgId)]);
+    res.json({ success: true, message: "Ad deleted successfully" });
+  } catch (err) {
+    console.error("Failed to delete ad:", err);
+    res.status(500).json({ success: false, message: "Internal server error" });
   }
 });
 
@@ -2290,7 +3147,21 @@ app.listen(PORT, async () => {
     const conn = await pool.connect();
     conn.release();
     dbStatus = "connected";
-  } catch {
+
+    // Create ads table in DB on startup
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS institute.institute_ads (
+        id SERIAL PRIMARY KEY,
+        org_id VARCHAR(100) NOT NULL,
+        title VARCHAR(255) NOT NULL,
+        status VARCHAR(20) DEFAULT 'Active',
+        image TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+      )
+    `);
+    console.log("✅ Auto-created table 'institute.institute_ads' if not exists.");
+  } catch (err: any) {
+    console.error("❌ Database connection/initialization error:", err.message);
     dbStatus = "disconnected";
   }
 

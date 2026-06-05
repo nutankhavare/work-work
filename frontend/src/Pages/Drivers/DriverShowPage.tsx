@@ -19,7 +19,8 @@ import {
   Phone,
   Truck,
   Heart,
-  Download
+  Download,
+  Cpu
 } from "lucide-react";
 
 // Components
@@ -56,7 +57,7 @@ const DriverShowPage = () => {
 
     const [driver, setDriver] = useState<Driver | null>(null);
     const [loading, setLoading] = useState(true);
-    const [activeTab, setActiveTab] = useState<'details' | 'professional' | 'documents'>('details');
+    const [activeTab, setActiveTab] = useState<'details' | 'professional' | 'documents' | 'beacon'>('details');
     const [showExport, setShowExport] = useState(false);
 
     useEffect(() => {
@@ -206,7 +207,8 @@ const DriverShowPage = () => {
                         {[
                           { key: 'details', label: 'Identity & Contacts', icon: User },
                           { key: 'professional', label: 'Compliance & Permits', icon: ShieldCheck },
-                          { key: 'documents', label: 'Fleet Vault', icon: FileText }
+                          { key: 'documents', label: 'Fleet Vault', icon: FileText },
+                          { key: 'beacon', label: 'Beacon Assigned', icon: Cpu }
                         ].map((tab) => (
                            <button key={tab.key} onClick={() => setActiveTab(tab.key as any)} className={`flex items-center gap-2 px-5 py-4 text-[11px] font-[800] uppercase tracking-wider transition-all relative border-b-[3px] whitespace-nowrap ${activeTab === tab.key ? "text-[#7c3aed] border-[#7c3aed]" : "text-[#94a3b8] border-transparent hover:text-[#475569]"}`}>
                               <tab.icon size={15} />
@@ -324,6 +326,51 @@ const DriverShowPage = () => {
                                   {driver.medical_fitness_certificate && <DocumentItem label="Medical Fitness Cert" path={driver.medical_fitness_certificate} updatedAt={driver.updated_at} />}
                                   {driver.address_proof_doc && <DocumentItem label="Address Registry" path={driver.address_proof_doc} updatedAt={driver.updated_at} />}
                                </div>
+                            </SectionCard>
+                        )}
+
+                        {activeTab === 'beacon' && (
+                            <SectionCard icon={Cpu} title="Beacon Hardware Binding" colorClass="bg-[#fafbff] text-[#10b981]">
+                                {driver.beacon_id ? (
+                                    <div className="max-w-md mx-auto p-6 bg-white rounded-2xl border border-[#e2e8f0] shadow-sm flex flex-col items-center text-center">
+                                        <div className="w-16 h-16 bg-[#ecfdf5] text-[#10b981] rounded-full flex items-center justify-center mb-4 relative">
+                                            <Cpu size={32} />
+                                            <span className="absolute top-0 right-0 flex h-3.5 w-3.5">
+                                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[#10b981] opacity-75"></span>
+                                                <span className="relative inline-flex rounded-full h-3.5 w-3.5 bg-[#10b981]"></span>
+                                            </span>
+                                        </div>
+                                        <h4 className="text-[16px] font-[900] text-[#1e293b] mb-1 uppercase tracking-tight">Active Beacon Linked</h4>
+                                        <p className="text-[12px] text-[#64748b] mb-6">This driver is currently assigned to a physical tracking device.</p>
+                                        
+                                        <div className="w-full bg-[#fafbff] rounded-xl border border-[#f1f5f9] p-4 text-left space-y-3">
+                                            <div>
+                                                <span className="text-[9px] font-[900] text-[#94a3b8] uppercase tracking-wider block mb-0.5">Device ID / Serial</span>
+                                                <span className="text-[13.5px] font-[800] text-[#1e293b]">{driver.beacon_id}</span>
+                                            </div>
+                                            <div>
+                                                <span className="text-[9px] font-[900] text-[#94a3b8] uppercase tracking-wider block mb-0.5">Hardware Status</span>
+                                                <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-[800] bg-[#ecfdf5] text-[#059669] border border-[#d1fae5] uppercase tracking-wide">
+                                                    ONLINE & TRANSMITTING
+                                                </span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                ) : (
+                                    <div className="py-16 text-center max-w-sm mx-auto">
+                                        <div className="w-16 h-16 bg-slate-50 text-slate-300 rounded-full flex items-center justify-center mx-auto mb-4">
+                                            <Cpu size={32} />
+                                        </div>
+                                        <h3 className="text-[15px] font-[900] text-[#1e293b] mb-1">No Beacon Assigned</h3>
+                                        <p className="text-[12.5px] text-[#94a3b8] mb-6">This driver does not have any physical beacon linked to them yet.</p>
+                                        <button
+                                            onClick={() => navigate(`/drivers/edit/${id}`)}
+                                            className="btn btn-primary justify-center w-full"
+                                        >
+                                            Assign Beacon Device
+                                        </button>
+                                    </div>
+                                )}
                             </SectionCard>
                         )}
 

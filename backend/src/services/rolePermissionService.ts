@@ -31,11 +31,6 @@ const DEFAULT_PERMISSIONS = [
   "create drivers",
   "edit drivers",
   "delete drivers",
-  "view travellers",
-  "create travellers",
-  "edit travellers",
-  "delete travellers",
-  "view bookings",
   "view vendors",
   "view feedbacks",
   "view reports",
@@ -181,7 +176,13 @@ export async function getRoles(orgId: string): Promise<Role[]> {
   await ensureDefaultAdminRole(orgId);
 
   if (!schemaReady) {
-    return inMemoryRoles.filter((r) => r.org_id === orgId).sort((a, b) => b.id - a.id);
+    return inMemoryRoles
+      .filter((r) => r.org_id === orgId)
+      .map(r => ({
+        ...r,
+        permissions: (r.permissions || []).filter((p: any) => !p.name.includes("traveller") && !p.name.includes("booking"))
+      }))
+      .sort((a, b) => b.id - a.id);
   }
 
   return withRLS(orgId, async (client) => {
@@ -197,7 +198,13 @@ export async function getRoles(orgId: string): Promise<Role[]> {
        ORDER BY r.id DESC`,
       [orgId]
     );
-    return result.rows as Role[];
+    const roles = result.rows as Role[];
+    return roles.map(role => ({
+      ...role,
+      permissions: (role.permissions || []).filter(
+        (p: any) => !p.name.includes("traveller") && !p.name.includes("booking")
+      )
+    }));
   });
 }
 
@@ -205,7 +212,10 @@ export async function getRoleById(orgId: string, roleId: number): Promise<Role> 
   if (!schemaReady) {
     const role = inMemoryRoles.find((r) => r.org_id === orgId && r.id === roleId);
     if (!role) throw new AppError(404, "Role not found");
-    return role;
+    return {
+      ...role,
+      permissions: (role.permissions || []).filter((p: any) => !p.name.includes("traveller") && !p.name.includes("booking"))
+    };
   }
 
   return withRLS(orgId, async (client) => {
@@ -222,7 +232,11 @@ export async function getRoleById(orgId: string, roleId: number): Promise<Role> 
     );
 
     if (result.rows.length === 0) throw new AppError(404, "Role not found");
-    return result.rows[0] as Role;
+    const role = result.rows[0] as Role;
+    role.permissions = (role.permissions || []).filter(
+      (p: any) => !p.name.includes("traveller") && !p.name.includes("booking")
+    );
+    return role;
   });
 }
 
@@ -253,50 +267,57 @@ export async function createRole(
     inMemoryRoles.push(role);
     return role;
   }
-
-  const client = await pool.connect();
   try {
-    await client.query("BEGIN");
-    
-    // Use the client with RLS for consistency
-    await client.query(`SET LOCAL app.current_org_id = $1`, [orgId]);
+    return await withRLS(orgId, async (client) => {
+      const roleResult = await client.query(
+        `INSERT INTO ${ROLE_TABLE} (org_id, name, description, department, access_level, status, created_by)
+         VALUES ($1, $2, $3, $4, $5, $6, $7)
+         RETURNING id, org_id, name, description, department, access_level, status, created_by, created_at, updated_at`,
+        [
+          orgId, 
+          data.name.trim(), 
+          data.description ?? null,
+          data.department ?? null,
+          data.access_level ?? null,
+          data.status ?? 'Active',
+          data.created_by ?? 'Admin User'
+        ]
+      );
+      
+      const role = roleResult.rows[0];
 
-    const roleResult = await client.query(
-      `INSERT INTO ${ROLE_TABLE} (org_id, name, description, department, access_level, status, created_by)
-       VALUES ($1, $2, $3, $4, $5, $6, $7)
-       RETURNING id, org_id, name, description, department, access_level, status, created_by, created_at, updated_at`,
-      [
-        orgId, 
-        data.name.trim(), 
-        data.description ?? null,
-        data.department ?? null,
-        data.access_level ?? null,
-        data.status ?? 'Active',
-        data.created_by ?? 'Admin User'
-      ]
-    );
-    
-    const role = roleResult.rows[0];
-
-    if (data.permissions && data.permissions.length > 0) {
-      for (const permissionId of data.permissions) {
-        await client.query(
-          `INSERT INTO ${ROLE_PERMISSION_JUNCTION} (role_id, permission_id) VALUES ($1, $2)`,
-          [role.id, permissionId]
-        );
+      if (data.permissions && data.permissions.length > 0) {
+        for (const permissionId of data.permissions) {
+          await client.query(
+            `INSERT INTO ${ROLE_PERMISSION_JUNCTION} (role_id, permission_id) VALUES ($1, $2)`,
+            [role.id, permissionId]
+          );
+        }
       }
-    }
 
-    await client.query("COMMIT");
-    
-    // Fetch complete role with permissions
-    return await getRoleById(orgId, role.id);
+      // Fetch complete role with permissions
+      const result = await client.query(
+        `SELECT r.id, r.org_id, r.name, r.description, r.department, r.access_level, r.status, r.created_by, r.created_at, r.updated_at,
+                COALESCE(JSON_AGG(JSON_BUILD_OBJECT('id', p.id, 'name', p.name)) FILTER (WHERE p.id IS NOT NULL), '[]') as permissions
+         FROM ${ROLE_TABLE} r
+         LEFT JOIN ${ROLE_PERMISSION_JUNCTION} rp ON r.id = rp.role_id
+         LEFT JOIN ${PERMISSION_TABLE} p ON rp.permission_id = p.id
+         WHERE r.org_id = $1 AND r.id = $2
+         GROUP BY r.id`,
+        [orgId, role.id]
+      );
+      
+      if (result.rows.length === 0) throw new AppError(404, "Role not found");
+      const completeRole = result.rows[0] as Role;
+      completeRole.permissions = (completeRole.permissions || []).filter(
+        (p: any) => !p.name.includes("traveller") && !p.name.includes("booking")
+      );
+      return completeRole;
+    });
   } catch (error: any) {
-    await client.query("ROLLBACK");
+    if (error instanceof AppError) throw error;
     if (error?.code === "23505") throw new AppError(409, "Role already exists");
     throw new AppError(500, "Failed to create role");
-  } finally {
-    client.release();
   }
 }
 
@@ -325,62 +346,71 @@ export async function updateRole(
     return role;
   }
 
-  const client = await pool.connect();
   try {
-    await client.query("BEGIN");
-    
-    // Set RLS context
-    await client.query(`SET LOCAL app.current_org_id = $1`, [orgId]);
+    return await withRLS(orgId, async (client) => {
+      const result = await client.query(
+        `UPDATE ${ROLE_TABLE}
+         SET
+           name = COALESCE($3, name),
+           description = COALESCE($4, description),
+           department = COALESCE($5, department),
+           access_level = COALESCE($6, access_level),
+           status = COALESCE($7, status),
+           updated_at = NOW()
+         WHERE org_id = $1 AND id = $2
+         RETURNING id`,
+        [
+          orgId, 
+          roleId, 
+          data.name?.trim() ?? null, 
+          data.description ?? null,
+          data.department ?? null,
+          data.access_level ?? null,
+          data.status ?? null
+        ]
+      );
 
-    const result = await client.query(
-      `UPDATE ${ROLE_TABLE}
-       SET
-         name = COALESCE($3, name),
-         description = COALESCE($4, description),
-         department = COALESCE($5, department),
-         access_level = COALESCE($6, access_level),
-         status = COALESCE($7, status),
-         updated_at = NOW()
-       WHERE org_id = $1 AND id = $2
-       RETURNING id`,
-      [
-        orgId, 
-        roleId, 
-        data.name?.trim() ?? null, 
-        data.description ?? null,
-        data.department ?? null,
-        data.access_level ?? null,
-        data.status ?? null
-      ]
-    );
+      if (result.rows.length === 0) throw new AppError(404, "Role not found");
 
-    if (result.rows.length === 0) throw new AppError(404, "Role not found");
-
-    // Sync permissions if provided
-    if (data.permissions !== undefined) {
-      // 1. Delete existing
-      await client.query(`DELETE FROM ${ROLE_PERMISSION_JUNCTION} WHERE role_id = $1`, [roleId]);
-      
-      // 2. Insert new
-      if (data.permissions.length > 0) {
-        for (const permissionId of data.permissions) {
-          await client.query(
-            `INSERT INTO ${ROLE_PERMISSION_JUNCTION} (role_id, permission_id) VALUES ($1, $2)`,
-            [roleId, permissionId]
-          );
+      // Sync permissions if provided
+      if (data.permissions !== undefined) {
+        // 1. Delete existing
+        await client.query(`DELETE FROM ${ROLE_PERMISSION_JUNCTION} WHERE role_id = $1`, [roleId]);
+        
+        // 2. Insert new
+        if (data.permissions.length > 0) {
+          for (const permissionId of data.permissions) {
+            await client.query(
+              `INSERT INTO ${ROLE_PERMISSION_JUNCTION} (role_id, permission_id) VALUES ($1, $2)`,
+              [roleId, permissionId]
+            );
+          }
         }
       }
-    }
 
-    await client.query("COMMIT");
-    return await getRoleById(orgId, roleId);
+      // Fetch updated role with permissions
+      const roleResult = await client.query(
+        `SELECT r.id, r.org_id, r.name, r.description, r.department, r.access_level, r.status, r.created_by, r.created_at, r.updated_at,
+                COALESCE(JSON_AGG(JSON_BUILD_OBJECT('id', p.id, 'name', p.name)) FILTER (WHERE p.id IS NOT NULL), '[]') as permissions
+         FROM ${ROLE_TABLE} r
+         LEFT JOIN ${ROLE_PERMISSION_JUNCTION} rp ON r.id = rp.role_id
+         LEFT JOIN ${PERMISSION_TABLE} p ON rp.permission_id = p.id
+         WHERE r.org_id = $1 AND r.id = $2
+         GROUP BY r.id`,
+        [orgId, roleId]
+      );
+      
+      if (roleResult.rows.length === 0) throw new AppError(404, "Role not found");
+      const completeRole = roleResult.rows[0] as Role;
+      completeRole.permissions = (completeRole.permissions || []).filter(
+        (p: any) => !p.name.includes("traveller") && !p.name.includes("booking")
+      );
+      return completeRole;
+    });
   } catch (error: any) {
-    await client.query("ROLLBACK");
     if (error instanceof AppError) throw error;
     if (error?.code === "23505") throw new AppError(409, "Role already exists");
     throw new AppError(500, "Failed to update role");
-  } finally {
-    client.release();
   }
 }
 
@@ -399,11 +429,15 @@ export async function deleteRole(orgId: string, roleId: number): Promise<void> {
 export async function getPermissions(): Promise<Permission[]> {
   if (!schemaReady) {
     seedInMemoryPermissions();
-    return [...inMemoryPermissions].sort((a, b) => a.id - b.id);
+    return [...inMemoryPermissions]
+      .filter(p => !p.name.includes("traveller") && !p.name.includes("booking"))
+      .sort((a, b) => a.id - b.id);
   }
 
   const result = await pool.query(`SELECT id, name FROM ${PERMISSION_TABLE} ORDER BY id ASC`);
-  return result.rows as Permission[];
+  return (result.rows as Permission[]).filter(
+    (p) => !p.name.includes("traveller") && !p.name.includes("booking")
+  );
 }
 
 export async function createPermission(name: string): Promise<Permission> {

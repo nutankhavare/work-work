@@ -4,7 +4,7 @@ import Sidebar from "../Components/Sidebar";
 import IndexPage from "../Pages/RolesPermissions/IndexPage";
 import EditPage from "../Pages/RolesPermissions/EditPage";
 import CreatePage from "../Pages/RolesPermissions/CreatePage";
-import MobileHeader from "../Components/MobileHeader";
+// import MobileHeader from "../Components/MobileHeader";
 import VehicleIndexPage from "../Pages/Vehicles/VehicleIndexPage";
 import VehicleShowPage from "../Pages/Vehicles/VehicleShowPage";
 import VehicleCreatePage from "../Pages/Vehicles/VehicleCreatePage";
@@ -13,17 +13,11 @@ import DriverIndexPage from "../Pages/Drivers/DriverIndexPage";
 import DriverShowPage from "../Pages/Drivers/DriverShowPage";
 import DriverEditPage from "../Pages/Drivers/DriverEditPage";
 import DriverCreatePage from "../Pages/Drivers/DriverCreatePage";
-import BookingIndexPage from "../Pages/Bookings/BookingIndexPage";
-import BookingShowPage from "../Pages/Bookings/BookingShowPage";
 import DeviceManagementIndexPage from "../Pages/DeviceManagement/IndexPage";
-import AppUsersIndexPage from "../Pages/AppUsers/IndexPage";
 import StaffIndexPage from "../Pages/Staffs/StaffIndexPage";
 import StaffCreatePage from "../Pages/Staffs/StaffCreatePage";
 import StaffEditPage from "../Pages/Staffs/StaffEditPage";
 import VehicleTrackPage from "../Pages/Vehicles/VehicleTrackPage";
-import TravellerIndexPage from "../Pages/Travelers/TravellerIndexPage";
-import TravellerShowPage from "../Pages/Travelers/TravellerShowPage";
-import TravellerEditPage from "../Pages/Travelers/TravellerEditPage";
 import StaffShowPage from "../Pages/Staffs/StaffShowPage";
 import DashboardPage from "../Pages/DashboardPage";
 import ComplianceIndexPage from "../Pages/Compliance/ComplianceIndexPage";
@@ -33,7 +27,8 @@ import BulkCommunicationPage from "../Pages/BulkCommunication/BulkCommunicationP
 import CustomerCarePage from "../Pages/CustomerCare/CustomerCarePage";
 import ReportHub from "../Pages/Reports/ReportHub";
 import FeedbacksPage from "../Pages/Feedbacks/FeedbacksPage";
-import FeedbackResolve from "../Pages/Feedbacks/FeedbackResolve";
+import AdManagement from "../Pages/AdManagement/AdManagement";
+import AdManagementCreate from "../Pages/AdManagement/AdManagementCreate";
 
 const AuthLayout = () => {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
@@ -96,17 +91,7 @@ const AuthLayout = () => {
               {/* Device Management */}
               <Route path="devices" element={<DeviceManagementIndexPage />} />
 
-              {/* App Users */}
-              <Route path="app-users" element={<AppUsersIndexPage />} />
 
-              {/* Booking Pages */}
-              <Route path="bookings" element={<BookingIndexPage />} />
-              <Route path="bookings/show/:id" element={<BookingShowPage />} />
-
-              {/* Traveller Pages */}
-              <Route path="travellers" element={<TravellerIndexPage />} />
-              <Route path="travellers/show/:id" element={<TravellerShowPage />} />
-              <Route path="travellers/edit/:id" element={<TravellerEditPage />} />
 
               {/* Compliance Module */}
               <Route path="compliance" element={<ComplianceIndexPage />} />
@@ -118,15 +103,21 @@ const AuthLayout = () => {
               {/* Bulk Communication */}
               <Route path="bulk-communication" element={<BulkCommunicationPage />} />
 
+              {/* Ad Management */}
+              <Route path="ads" element={<AdManagement />} />
+              <Route path="ads/create" element={<AdManagementCreate />} />
+
               {/* Customer Care */}
               <Route path="customer-care" element={<CustomerCarePage />} />
 
               {/* Reports */}
               <Route path="reports" element={<ReportHub />} />
+              <Route path="reports/basic" element={<ReportHub view="basic" />} />
+              <Route path="reports/advanced" element={<ReportHub view="advanced" />} />
+              <Route path="reports/compliance" element={<ReportHub view="compliance" />} />
 
               {/* Feedbacks & Complaints */}
               <Route path="feedbacks" element={<FeedbacksPage />} />
-              <Route path="feedbacks/resolve/:id" element={<FeedbackResolve />} />
 
             </Routes>
           </div>

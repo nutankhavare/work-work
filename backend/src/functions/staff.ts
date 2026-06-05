@@ -122,8 +122,8 @@ async function readRequestBody(request: HttpRequest): Promise<Record<string, unk
     const payload: Record<string, unknown> = {};
 
     for (const [key, value] of form.entries()) {
-      if (value instanceof File) {
-        payload[key] = value.name;
+      if (value && typeof value === "object" && "name" in value) {
+        payload[key] = (value as any).name;
         continue;
       }
 

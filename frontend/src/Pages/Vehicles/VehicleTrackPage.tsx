@@ -1,7 +1,7 @@
 // src/Pages/Vehicles/VehicleTrackPage.tsx
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
-import { LoadScript } from "@react-google-maps/api";
+import { useJsApiLoader } from "@react-google-maps/api";
 import { useAuth } from "../../Context/AuthContext";
 import tenantApi from "../../Services/ApiService";
 
@@ -47,6 +47,10 @@ const VehicleTrackPage = () => {
     const timerRef = useRef<NodeJS.Timeout | null>(null);
 
     const googleMapsApiKey = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+    const { isLoaded } = useJsApiLoader({
+        id: 'google-map-script',
+        googleMapsApiKey: googleMapsApiKey,
+    });
 
     // --- 1. Timer Logic ---
     const startTimerInterval = () => {
@@ -182,7 +186,7 @@ const VehicleTrackPage = () => {
 
     // Helpers
     const drivers = vehicle?.beacons.filter(b => b.type.toLowerCase() === 'driver') || [];
-    const passengers = vehicle?.beacons.filter(b => b.type.toLowerCase() === 'traveller') || [];
+    const passengers = vehicle?.beacons.filter(b => b.type.toLowerCase() === 'traveller' || b.type.toLowerCase() === 'staff') || [];
 
     const formatCountdownStr = (seconds: number) => `${seconds}s`;
 
@@ -246,13 +250,13 @@ const VehicleTrackPage = () => {
                         <div className="lg:col-span-2 bg-white rounded-lg shadow-sm border border-slate-200  relative">
 
                             {/* FIX: LoadScript is top-level within this div, so map loads instantly */}
-                            <LoadScript googleMapsApiKey={googleMapsApiKey}>
+                            {isLoaded && (
                                 <GoogleMapDisplay
                                     vehicles={vehicle ? [vehicle] : []}
                                     selectedVehicleNumber={vehicle?.vehicle_number || null}
                                     onVehicleSelect={() => { }}
                                 />
-                            </LoadScript>
+                            )}
 
                             {/* Overlay: Loading */}
                             {loading && (

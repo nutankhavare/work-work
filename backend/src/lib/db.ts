@@ -1,9 +1,24 @@
 import "dotenv/config";
 import { Pool } from "pg";
 import type { PoolClient } from "pg";
+import { execSync } from "child_process";
 
 const databaseUrl = process.env.DATABASE_URL;
-const host = process.env.PGHOST;
+let host = process.env.PGHOST;
+
+if (host && host.includes(".") && !host.match(/^\d+\.\d+\.\d+\.\d+$/)) {
+  try {
+    const dnsLines = execSync(`dig +short ${host}`, { encoding: "utf8" }).trim().split("\n");
+    const ip = dnsLines.find(l => l.match(/^\d+\.\d+\.\d+\.\d+$/));
+    if (ip) {
+      console.log(`[db] Resolved host ${host} to IP ${ip} successfully`);
+      host = ip;
+    }
+  } catch (dnsErr) {
+    console.warn(`[db] dig DNS resolution failed, using raw host:`, dnsErr);
+  }
+}
+
 const port = process.env.PGPORT ? Number(process.env.PGPORT) : undefined;
 const user = process.env.PGUSER;
 const password = process.env.PGPASSWORD;
@@ -64,14 +79,14 @@ const pool: PoolLike =
           password,
           database,
           ssl: sslConfig,
-          max: 20, // Increased capacity
+          max: 8, // Reduced capacity to allow test runners to connect
           connectionTimeoutMillis: 10000, // 10s timeout to prevent hanging
           idleTimeoutMillis: 30000, // Close idle connections after 30s
         })
       : new Pool({
           connectionString: databaseUrl,
           ssl: sslConfig,
-          max: 20,
+          max: 8,
           connectionTimeoutMillis: 10000,
           idleTimeoutMillis: 30000,
         })
@@ -79,18 +94,46 @@ const pool: PoolLike =
 
 /**
  * Execute a database operation with Row-Level Security (RLS) enabled.
- * It first sets the organization ID in the session, then executes the callback.
+ *
+ * Uses SET LOCAL (transaction-scoped) so the org context is automatically
+ * cleared when the transaction ends — preventing context leaking to the
+ * next request that reuses this pooled connection.
+ *
+ * @throws if orgId is falsy (defensive guard against missing tenant context)
+ * @throws if SET LOCAL app.current_org_id fails (propagates, triggers ROLLBACK)
  */
 export async function withRLS<T>(orgId: string, callback: (client: PoolClient) => Promise<T>): Promise<T> {
+  if (!orgId) {
+    throw new Error("[RLS] Missing orgId — cannot apply RLS context without a valid organization ID");
+  }
+
   const client = (await pool.connect()) as PoolClient;
   try {
-    // 1. Set the organization ID for this session
-    await client.query(`SET app.current_org_id = $1`, [orgId]);
-    
-    // 2. Execute the business logic
-    return await callback(client);
+    // 1. Open explicit transaction — required for SET LOCAL to be scoped correctly
+    await client.query("BEGIN");
+
+    // 2. Apply RLS tenant context (transaction-scoped, auto-cleared on COMMIT/ROLLBACK)
+    //    Intentionally NOT caught here — if SET LOCAL fails, we want it to throw
+    //    and trigger the ROLLBACK in the catch block below.
+    await client.query(`SELECT set_config('app.current_org_id', $1, true)`, [orgId]);
+
+    // 3. Execute the business logic using the same client
+    const result = await callback(client);
+
+    // 4. Commit only after successful execution
+    await client.query("COMMIT");
+
+    return result;
+  } catch (err) {
+    // 5. Rollback on ANY failure (SET LOCAL, callback, or commit)
+    try {
+      await client.query("ROLLBACK");
+    } catch {
+      // ROLLBACK failure is non-fatal — swallow to always reach finally
+    }
+    throw err;
   } finally {
-    // 3. Always release the client back to the pool
+    // 6. Always release the client back to the pool
     client.release();
   }
 }

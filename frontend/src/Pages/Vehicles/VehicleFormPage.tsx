@@ -2,22 +2,22 @@
 import { useState, useEffect } from "react";
 import { useForm, type SubmitHandler, useWatch } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
-import axios from "axios";
+// import axios from "axios";
 import LoadingSpinner from "../../Components/UI/LoadingSpinner";
 import PageHeader from "../../Components/UI/PageHeader";
 import tenantApi from "../../Services/ApiService";
 import { useAlert } from "../../Context/AlertContext";
 import { useConfirm } from "../../Context/ConfirmContext";
-import InfoTooltip from "../../Components/UI/InfoTooltip";
+// import InfoTooltip from "../../Components/UI/InfoTooltip";
 import type { Vehicle } from "./Vehicle.types";
 import type { FormDropdown, BeaconDevice } from "../../Types/Index";
 import { 
-  Truck, 
+  // Truck, 
   IdCard, 
   MapPin, 
-  ShieldCheck, 
+  // ShieldCheck, 
   User, 
-  UploadCloud, 
+  // UploadCloud, 
   Settings, 
   PlusCircle, 
   FileEdit, 
@@ -28,12 +28,12 @@ import {
   Bus, 
   Calendar, 
   Fuel,
-  Info,
+  // Info,
   History,
-  AlertCircle,
+  // AlertCircle,
   FileText,
   Tag,
-  Search,
+  // Search,
   Phone,
   Layout,
   Briefcase
@@ -102,21 +102,23 @@ const VehicleFormPage = ({ mode, vehicleId }: VehicleFormPageProps) => {
   const [ownershipTypes, setOwnershipTypes] = useState<FormDropdown[]>([]);
   const [statuses, setStatuses] = useState<FormDropdown[]>([]);
   const [gps, setBeacons] = useState<BeaconDevice[]>([]);
+  const [unassignedDrivers, setUnassignedDrivers] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
 
   const ownershipType = useWatch({ control, name: "ownership_type" });
 
   useEffect(() => {
-    const fetchInitialData = async () => {
+    const loadAllData = async () => {
       try {
         setLoading(true);
-        const [vt, ft, pt, ot, st, gd] = await Promise.all([
+
+        // 1. Fetch static dropdowns (GPS dropdown initially without current filter)
+        const [vt, ft, pt, ot, st] = await Promise.all([
           tenantApi.get(`/masters/forms/dropdowns/fields?type=vehicle&field=vehicle_type`),
           tenantApi.get(`/masters/forms/dropdowns/fields?type=vehicle&field=fuel_type`),
           tenantApi.get(`/masters/forms/dropdowns/fields?type=vehicle&field=permit_type`),
           tenantApi.get(`/masters/forms/dropdowns/fields?type=vehicle&field=ownership_type`),
           tenantApi.get(`/masters/forms/dropdowns/fields?type=common&field=status`),
-          tenantApi.get(`/gps-device/for/dropdown`),
         ]);
 
         setVehicleTypes(Array.isArray(vt.data) ? vt.data : vt.data?.data || []);
@@ -124,47 +126,73 @@ const VehicleFormPage = ({ mode, vehicleId }: VehicleFormPageProps) => {
         setPermitTypes(Array.isArray(pt.data) ? pt.data : pt.data?.data || []);
         setOwnershipTypes(Array.isArray(ot.data) ? ot.data : ot.data?.data || []);
         setStatuses(Array.isArray(st.data) ? st.data : st.data?.data || []);
-        setBeacons(Array.isArray(gd.data) ? gd.data : gd.data?.data || []);
+
+        // 2. Fetch vehicle details & drivers
+        if (mode === "edit" && vehicleId) {
+          const vehicleRes = await tenantApi.get(`/vehicles/${vehicleId}`);
+          if (vehicleRes.data.success) {
+            const data = vehicleRes.data.data;
+            
+            // Fetch GPS dropdown with ?current= so current device appears even if assigned
+            const gd = await tenantApi.get(`/gps-device/for/dropdown?current=${data.gps_device_id || ''}`);
+            setBeacons(Array.isArray(gd.data) ? gd.data : gd.data?.data || []);
+
+            // Fetch drivers including the currently assigned one
+            const driversRes = await tenantApi.get(`/drivers/unassigned?current_assigned=${data.assigned_driver_id || ''}`);
+            if (driversRes.data.success) {
+              setUnassignedDrivers(driversRes.data.data);
+            }
+
+            const formatDate = (d: string) => d ? new Date(d).toISOString().split('T')[0] : "";
+            reset({
+              ...data,
+              rc_isued_date: formatDate(data.rc_isued_date),
+              rc_expiry_date: formatDate(data.rc_expiry_date),
+              gps_installation_date: formatDate(data.gps_installation_date),
+              permit_issue_date: formatDate(data.permit_issue_date),
+              permit_expiry_date: formatDate(data.permit_expiry_date),
+              insurance_issued_date: formatDate(data.insurance_issued_date),
+              insurance_expiry_date: formatDate(data.insurance_expiry_date),
+              fitness_issued_date: formatDate(data.fitness_issued_date),
+              fitness_expiry_date: formatDate(data.fitness_expiry_date),
+              pollution_issued_date: formatDate(data.pollution_issued_date),
+              pollution_expiry_date: formatDate(data.pollution_expiry_date),
+              last_service_date: formatDate(data.last_service_date),
+              next_service_due_date: formatDate(data.next_service_due_date),
+              tyre_replacement_due_date: formatDate(data.tyre_replacement_due_date),
+              battery_replacement_due_date: formatDate(data.battery_replacement_due_date),
+            });
+          }
+        } else {
+          // In create mode, just fetch unassigned GPS devices and drivers
+          const gd = await tenantApi.get(`/gps-device/for/dropdown`);
+          setBeacons(Array.isArray(gd.data) ? gd.data : gd.data?.data || []);
+
+          const driversRes = await tenantApi.get(`/drivers/unassigned`);
+          if (driversRes.data.success) {
+            setUnassignedDrivers(driversRes.data.data);
+          }
+        }
       } catch (error) {
         showAlert("Failed to load vehicle form data.", "error");
       } finally {
         setLoading(false);
       }
     };
-    fetchInitialData();
-  }, [showAlert]);
 
-  useEffect(() => {
-    if (mode === "edit" && vehicleId) {
-      tenantApi.get(`/vehicles/${vehicleId}`).then(res => {
-        if (res.data.success) {
-          const data = res.data.data;
-          const formatDate = (d: string) => d ? new Date(d).toISOString().split('T')[0] : "";
-          reset({
-            ...data,
-            rc_isued_date: formatDate(data.rc_isued_date),
-            rc_expiry_date: formatDate(data.rc_expiry_date),
-            gps_installation_date: formatDate(data.gps_installation_date),
-            permit_issue_date: formatDate(data.permit_issue_date),
-            permit_expiry_date: formatDate(data.permit_expiry_date),
-            insurance_issued_date: formatDate(data.insurance_issued_date),
-            insurance_expiry_date: formatDate(data.insurance_expiry_date),
-            fitness_issued_date: formatDate(data.fitness_issued_date),
-            fitness_expiry_date: formatDate(data.fitness_expiry_date),
-            pollution_issued_date: formatDate(data.pollution_issued_date),
-            pollution_expiry_date: formatDate(data.pollution_expiry_date),
-            last_service_date: formatDate(data.last_service_date),
-            next_service_due_date: formatDate(data.next_service_due_date),
-            tyre_replacement_due_date: formatDate(data.tyre_replacement_due_date),
-            battery_replacement_due_date: formatDate(data.battery_replacement_due_date),
-          });
-        }
-      });
-    }
-  }, [mode, vehicleId, reset]);
+    loadAllData();
+  }, [mode, vehicleId, reset, showAlert]);
 
-  const onInvalid = () => {
+  const onInvalid = (errors: any) => {
     showAlert("Please fill in all mandatory fields correctly.", "error");
+    const firstError = Object.keys(errors)[0];
+    if (firstError) {
+      const el = document.querySelector(`[name="${firstError}"]`);
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "center" });
+        (el as HTMLElement).focus({ preventScroll: true });
+      }
+    }
   };
 
   const onSubmit: SubmitHandler<FormInputs> = async (data) => {
@@ -175,7 +203,7 @@ const VehicleFormPage = ({ mode, vehicleId }: VehicleFormPageProps) => {
       const formData = new FormData();
       Object.keys(data).forEach((key) => {
         const k = key as keyof FormInputs;
-        if (data[k] instanceof FileList || k.includes('_doc') || k.includes('_certificate') || k.includes('_proof')) return;
+        if ((data[k] as any) instanceof FileList || k.includes('_doc') || k.includes('_certificate') || k.includes('_proof')) return;
         if (data[k] !== undefined && data[k] !== null && data[k] !== "") formData.append(k, String(data[k]));
       });
 
@@ -328,9 +356,9 @@ const VehicleFormPage = ({ mode, vehicleId }: VehicleFormPageProps) => {
                       GPS Device ID <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded ml-1">OPT</span>
                     </label>
                     <select {...register("gps_device_id")} className="form-select">
-                      <option value="">Select Device</option>
-                      {gps.map(g => <option key={g.id} value={g.device_id}>{g.device_id} ({g.sim_number})</option>)}
-                   </select>
+                       <option value="">Select Device</option>
+                       {gps.map((g: any) => <option key={g.id} value={g.device_id}>{g.device_id} ({g.sim_number || g.imei_number || ""})</option>)}
+                    </select>
                 </div>
                 <div>
                     <label className="form-label flex items-center gap-1.5">
@@ -361,9 +389,16 @@ const VehicleFormPage = ({ mode, vehicleId }: VehicleFormPageProps) => {
                 <div>
                     <label className="form-label flex items-center gap-1.5">
                       <User size={14} className="text-slate-400" />
-                      Assigned Driver ID <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded ml-1">OPT</span>
+                      Assigned Driver <span className="text-[9px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded ml-1">OPT</span>
                     </label>
-                    <input {...register("assigned_driver_id")} className="form-input" placeholder="e.g. DRV-1024" />
+                    <select {...register("assigned_driver_id")} className="form-input">
+                      <option value="">-- Select Unassigned Driver --</option>
+                      {unassignedDrivers.map(d => (
+                        <option key={d.id} value={d.id}>
+                          {d.first_name} {d.last_name || ''} {d.employee_id ? `(${d.employee_id})` : ''}
+                        </option>
+                      ))}
+                    </select>
                 </div>
                 <div>
                    <label className="form-label flex items-center gap-1.5">

@@ -9,7 +9,6 @@ import {
   Truck,
   Edit,
   MapPin,
-  Gauge,
   ShieldCheck,
   FileText,
   ChevronLeft,
@@ -26,7 +25,7 @@ import {
 // Components
 import { Loader } from "../../Components/UI/Loader";
 import EmptyState from "../../Components/UI/EmptyState";
-import tenantApi from "../../Services/ApiService";
+import tenantApi, { centralUrl } from "../../Services/ApiService";
 import type { Vehicle } from "./Vehicle.types";
 import { formatDateTime } from "../../Utils/Toolkit";
 import ExportOverlay from "../../Components/UI/ExportOverlay";
@@ -55,7 +54,7 @@ const VehicleShowPage = () => {
   const navigate = useNavigate();
   const [vehicle, setVehicle] = useState<Vehicle | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'specs' | 'telemetry' | 'compliance'>('specs');
+  const [activeTab, setActiveTab] = useState<'specs' | 'telemetry' | 'compliance' | 'hardware'>('specs');
   const [showExport, setShowExport] = useState(false);
 
   useEffect(() => {
@@ -204,8 +203,9 @@ const VehicleShowPage = () => {
           <div className="border-t border-[#f1f5f9] px-4 sm:px-8 flex gap-1 overflow-x-auto custom-scrollbar">
               {[
                 { key: 'specs', label: 'Technical Specs', icon: Settings },
-                { key: 'telemetry', label: 'Telemetry & ODB', icon: Zap },
-                { key: 'compliance', label: 'Compliance & Permits', icon: ShieldCheck }
+                { key: 'telemetry', label: 'Live Telemetry', icon: Zap },
+                { key: 'hardware', label: 'GPS & Hardware', icon: MapPin },
+                { key: 'compliance', label: 'Compliance', icon: ShieldCheck }
               ].map((tab) => (
                  <button key={tab.key} onClick={() => setActiveTab(tab.key as any)} className={`flex items-center gap-2 px-5 py-4 text-[11px] font-[800] uppercase tracking-wider transition-all relative border-b-[3px] whitespace-nowrap ${activeTab === tab.key ? "text-[#7c3aed] border-[#7c3aed]" : "text-[#94a3b8] border-transparent hover:text-[#475569]"}`}>
                     <tab.icon size={15} />
@@ -231,9 +231,9 @@ const VehicleShowPage = () => {
 
                         <SectionCard icon={Calendar} title="Operational Lifecycle" colorClass="bg-[#fcfdf2] text-[#d97706]">
                            <Field label="Mfg Year" value={vehicle.manufacturing_year} />
-                           <Field label="RC Issue Date" value={formatDateTime(vehicle.rc_isued_date)} />
-                           <Field label="RC Expiry" value={formatDateTime(vehicle.rc_expiry_date)} />
-                           <Field label="Fleet Entry" value={formatDateTime(vehicle.rc_isued_date)} />
+                           <Field label="RC Issue Date" value={formatDateTime(vehicle.rc_isued_date || null)} />
+                           <Field label="RC Expiry" value={formatDateTime(vehicle.rc_expiry_date || null)} />
+                           <Field label="Fleet Entry" value={formatDateTime(vehicle.rc_isued_date || null)} />
                         </SectionCard>
 
                         <SectionCard icon={Users} title="Ownership Protocol" colorClass="bg-[#fdf2f2] text-[#dc2626]">
@@ -249,6 +249,21 @@ const VehicleShowPage = () => {
                               <p className="text-[10px] font-black text-[#94a3b8] uppercase mb-1">Assigned Route</p>
                               <p className="text-[13px] font-black text-[#1e293b]">{vehicle.route || 'Global Roaming'}</p>
                            </div>
+                        </SectionCard>
+
+                        <SectionCard icon={Users} title="Driver Intel" colorClass="bg-[#f0f9ff] text-[#3b82f6]">
+                           {vehicle.driver_first_name || vehicle.assigned_driver_id ? (
+                             <>
+                               <Field label="Driver Name" value={`${vehicle.driver_first_name || 'Unknown'} ${vehicle.driver_last_name || ''}`} />
+                               <Field label="Employee ID" value={vehicle.driver_employee_id || vehicle.assigned_driver_id} />
+                               <Field label="Contact Number" value={vehicle.driver_mobile_number || 'N/A'} />
+                             </>
+                           ) : (
+                             <div className="p-4 bg-white rounded-xl border border-dashed border-[#e2e8f0] flex flex-col items-center justify-center text-center">
+                                <Users size={20} className="text-[#cbd5e1] mb-2" />
+                                <p className="text-[10px] font-black text-[#94a3b8] uppercase tracking-wider">No Driver Assigned</p>
+                             </div>
+                           )}
                         </SectionCard>
                     </div>
                 )}
@@ -272,14 +287,6 @@ const VehicleShowPage = () => {
                                  <p className="text-[24px] font-black text-[#1e293b]">{vehicle.speed || 0} <span className="text-[12px] text-[#94a3b8]">KM/H</span></p>
                               </div>
                            </div>
-                           <div className="mt-6 p-4 rounded-[15px] bg-[#f8fafc] border border-blue-50">
-                              <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-4">GPS Device binding</p>
-                              <div className="flex items-center justify-between">
-                                 <Field label="Device ID" value={vehicle.gps_device_id || 'NOT_BOUND'} />
-                                 <Field label="IMEI Protocol" value={vehicle.gps_device_id || 'U_IMEI_000'} />
-                                 <Field label="Sync Date" value={formatDateTime(vehicle.lastGpsUpdate ?? null)} />
-                              </div>
-                           </div>
                         </SectionCard>
 
                         <SectionCard icon={MapPin} title="Geospatial Coordinates" colorClass="bg-[#f0fdf4] text-[#059669]">
@@ -300,22 +307,38 @@ const VehicleShowPage = () => {
                     </div>
                 )}
 
+                {activeTab === 'hardware' && (
+                    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <SectionCard icon={MapPin} title="GPS Device Setup" colorClass="bg-[#f8faff] text-[#7c3aed]">
+                           <div className="p-4 rounded-[15px] bg-[#f8fafc] border border-indigo-50 h-full">
+                              <p className="text-[10px] font-black text-[#7c3aed] uppercase tracking-widest mb-4">Assigned Tracker</p>
+                              <div className="grid grid-cols-2 gap-4">
+                                 <Field label="Device ID" value={vehicle.gps_device_id || 'NOT_BOUND'} />
+                                 <Field label="IMEI Protocol" value={vehicle.gps_device_id || 'U_IMEI_000'} />
+                                 <Field label="Sim Number" value={vehicle.gps_sim_number || 'N/A'} />
+                                 <Field label="Sync Date" value={formatDateTime(vehicle.lastGpsUpdate ?? null)} />
+                              </div>
+                           </div>
+                        </SectionCard>
+                    </div>
+                )}
+
                 {activeTab === 'compliance' && (
                     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                         <SectionCard icon={ShieldCheck} title="Regulatory Compliance" colorClass="bg-[#fafbff] text-[#059669]">
                            <div className="grid grid-cols-2 gap-6 mb-6">
                               <Field label="PUC Protocol" value={vehicle.pollution_certificate_number} />
-                              <Field label="PUC Expiry" value={formatDateTime(vehicle.pollution_expiry_date)} />
+                              <Field label="PUC Expiry" value={formatDateTime(vehicle.pollution_expiry_date || null)} />
                               <Field label="Fitness Registry" value={vehicle.fitness_certificate_number} />
-                              <Field label="Fitness Expiry" value={formatDateTime(vehicle.fitness_expiry_date)} />
+                              <Field label="Fitness Expiry" value={formatDateTime(vehicle.fitness_expiry_date || null)} />
                            </div>
                            <div className="p-4 rounded-xl bg-[#f0f9ff] border border-blue-50">
                               <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-3">Insurance Matrix</p>
                               <Field label="Provider" value={vehicle.insurance_provider_name} />
                               <Field label="Policy Protocol" value={vehicle.insurance_policy_number} />
                               <div className="flex gap-4">
-                                 <Field label="Issued" value={formatDateTime(vehicle.insurance_issued_date)} />
-                                 <Field label="Expires" value={formatDateTime(vehicle.insurance_expiry_date)} />
+                                 <Field label="Issued" value={formatDateTime(vehicle.insurance_issued_date || null)} />
+                                 <Field label="Expires" value={formatDateTime(vehicle.insurance_expiry_date || null)} />
                               </div>
                            </div>
                         </SectionCard>

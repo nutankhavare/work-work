@@ -3,7 +3,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useNavigate, Link } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 
-import * as XLSX from "xlsx";
+// import * as XLSX from "xlsx";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
@@ -19,10 +19,10 @@ import {
   Phone,
   Mail,
   MapPin,
-  X,
+  // X,
   Trash2,
   Download,
-  FileSpreadsheet,
+  // FileSpreadsheet,
   FileText,
   Plus,
   IdCard
@@ -215,12 +215,12 @@ const DriverIndexPage = () => {
   }, [searchQuery, selectedCity, selectedStatus, selectedEmployment, allDrivers]);
 
   // 3. Handlers
-  const handleClearFilters = () => {
-    setSearchQuery("");
-    setSelectedCity("");
-    setSelectedStatus("");
-    setSelectedEmployment("");
-  };
+  // const handleClearFilters = () => {
+  //   setSearchQuery("");
+  //   setSelectedCity("");
+  //   setSelectedStatus("");
+  //   setSelectedEmployment("");
+  // };
 
   const handleDelete = async (driver: Driver) => {
     if (!(await confirm(`Are you sure you want to PERMANENTLY DELETE driver ${driver.first_name} ${driver.last_name}? This action cannot be undone.`)))
@@ -259,7 +259,14 @@ const DriverIndexPage = () => {
     autoTable(doc, {
       startY: 45,
       head: [["ID", "Name", "Email", "Phone", "City", "Status"]],
-      body: displayDrivers.map(d => [d.employee_id, `${d.first_name} ${d.last_name}`, d.email, d.mobile_number, d.city, d.status]),
+      body: displayDrivers.map(d => [
+        d.employee_id || "",
+        `${d.first_name} ${d.last_name}`,
+        d.email || "",
+        d.mobile_number || "",
+        d.city || "",
+        d.status || ""
+      ]),
       theme: 'grid',
       headStyles: { fillColor: [124, 58, 237] }
     });
@@ -333,8 +340,8 @@ const DriverIndexPage = () => {
     );
   };
 
-  const hasActiveFilters =
-    searchQuery || selectedCity || selectedStatus || selectedEmployment;
+  // const hasActiveFilters =
+  //   searchQuery || selectedCity || selectedStatus || selectedEmployment;
 
   return (
     <div className="min-h-screen font-[var(--font-manrope)]">

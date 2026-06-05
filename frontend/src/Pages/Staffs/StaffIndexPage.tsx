@@ -228,12 +228,12 @@ const StaffIndexPage = () => {
   }, [fetchStaff]);
 
   // 2. Handlers
-  const handleClearFilters = () => {
-    setSearchQuery("");
-    setStatusFilter("");
-    setRoleFilter("");
-    setCurrentPage(1);
-  };
+  // const handleClearFilters = () => {
+  //   setSearchQuery("");
+  //   setStatusFilter("");
+  //   setRoleFilter("");
+  //   setCurrentPage(1);
+  // };
 
   const handleDelete = async (emp: Employee) => {
     if (!(await confirm(`Delete ${emp.first_name} ${emp.last_name}? This cannot be undone.`))) return;

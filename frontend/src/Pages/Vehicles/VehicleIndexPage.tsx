@@ -174,12 +174,12 @@ const VehicleIndexPage = () => {
   }, [fetchVehicles]);
 
   // 2. Handlers
-  const handleClearFilters = () => {
-    setSearchQuery("");
-    setStatusFilter("");
-    setTypeFilter("");
-    setCurrentPage(1);
-  };
+  // const handleClearFilters = () => {
+  //   setSearchQuery("");
+  //   setStatusFilter("");
+  //   setTypeFilter("");
+  //   setCurrentPage(1);
+  // };
 
   const handleDelete = async (vehicle: Vehicle) => {
     if (!(await confirm(`Are you sure you want to PERMANENTLY DECOMMISSION vehicle ${vehicle.vehicle_number}? All associated telemetry and permit history will be archived.`))) return;
@@ -215,7 +215,14 @@ const VehicleIndexPage = () => {
     autoTable(doc, {
       startY: 45,
       head: [["Name", "Number", "Make", "Model", "Type", "Status"]],
-      body: vehicles.map(v => [v.vehicle_name, v.vehicle_number, v.make, v.model, v.vehicle_type, v.status]),
+      body: vehicles.map(v => [
+        v.vehicle_name || "",
+        v.vehicle_number || "",
+        v.make || "",
+        v.model || "",
+        v.vehicle_type || "",
+        v.status || ""
+      ]),
       theme: 'grid',
       headStyles: { fillColor: [124, 58, 237] }
     });
@@ -273,14 +280,14 @@ const VehicleIndexPage = () => {
     return doc;
   }, []);
 
-  const getVehicleIcon = (type: string = "") => {
-    const t = type.toLowerCase();
+  const getVehicleIcon = (type: string | null | undefined) => {
+    const t = (type || "").toLowerCase();
     if (t.includes("bus")) return <Bus size={20} />;
     if (t.includes("van")) return <Truck size={20} />;
     return <Car size={20} />;
   };
 
-  const hasActiveFilters = searchQuery || statusFilter || typeFilter;
+  // const hasActiveFilters = searchQuery || statusFilter || typeFilter;
 
   return (
     <div className="min-h-screen font-[var(--font-manrope)]">

@@ -1,6 +1,6 @@
 // src/Pages/Staffs/StaffEditPage.tsx
 import { useState, useEffect } from "react";
-import { useForm, type SubmitHandler, Controller, useFieldArray, useWatch } from "react-hook-form";
+import { useForm, type SubmitHandler, Controller, useWatch } from "react-hook-form";
 import { useNavigate, useParams } from "react-router-dom";
 import LoadingSpinner from "../../Components/UI/LoadingSpinner";
 import PageHeader from "../../Components/UI/PageHeader";
@@ -12,7 +12,7 @@ import type { Employee, Role } from "./Staff.types";
 import type { BeaconDevice, StateDistrict } from "../../Types/Index";
 import tenantApi, { tenantAsset } from "../../Services/ApiService";
 import axios from "axios";
-import { DUMMY_USER_IMAGE } from "../../Utils/Toolkit";
+// import { DUMMY_USER_IMAGE } from "../../Utils/Toolkit";
 
 const FormSection = ({ title, icon, children, color = "var(--primary)" }: any) => (
   <div className="form-card">
@@ -40,6 +40,11 @@ const StaffEditPage = () => {
   const [districts, setDistricts] = useState<StateDistrict[]>([]);
   const [beacons, setBeacons] = useState<BeaconDevice[]>([]);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [existingDocs, setExistingDocs] = useState<{
+    aadhaar_card?: string;
+    pan_card?: string;
+    bank_proof?: string;
+  }>({});
 
   const {
     register,
@@ -50,7 +55,7 @@ const StaffEditPage = () => {
     formState: { errors, isSubmitting },
   } = useForm<Employee>({ mode: "onChange" });
 
-  const { fields, append, remove } = useFieldArray({ control, name: "dependants" });
+  // const { fields, append, remove } = useFieldArray({ control, name: "dependants" });
   const selectedState = useWatch({ control, name: "state" });
   const pinCode = useWatch({ control, name: "pin_code" });
 
@@ -58,11 +63,13 @@ const StaffEditPage = () => {
     const fetchData = async () => {
       try {
         setLoading(true);
-        const [rolesRes, statesRes, beaconsRes, employeeRes] = await Promise.all([
+        const employeeRes = await tenantApi.get(`/employees/${id}`);
+        const emp = employeeRes.data.data;
+
+        const [rolesRes, statesRes, beaconsRes] = await Promise.all([
           tenantApi.get("/roles"),
           tenantApi.get(`/masters/forms/dropdowns/states`),
-          tenantApi.get(`/beacon-device/for/dropdown`),
-          tenantApi.get(`/employees/${id}`)
+          tenantApi.get(`/beacon-device/for/dropdown?current=${encodeURIComponent(emp.beacon_id || "")}`)
         ]);
 
         const rolesRaw = rolesRes.data.data;
@@ -70,8 +77,13 @@ const StaffEditPage = () => {
         setStates(Array.isArray(statesRes.data) ? statesRes.data : statesRes.data?.data || []);
         setBeacons(Array.isArray(beaconsRes.data) ? beaconsRes.data : beaconsRes.data?.data || []);
 
-        const emp = employeeRes.data.data;
         if (emp.photo) setPhotoPreview(`${tenantAsset}${emp.photo}`);
+
+        setExistingDocs({
+          aadhaar_card: emp.aadhaar_card || undefined,
+          pan_card: emp.pan_card || undefined,
+          bank_proof: emp.bank_proof || undefined,
+        });
 
         if (emp.state) {
           const districtRes = await tenantApi.get(`/masters/forms/dropdowns/districts/${emp.state}`);
@@ -121,18 +133,21 @@ const StaffEditPage = () => {
       })
       .catch(() => {});
   }, [selectedState, loading]);
-
   useEffect(() => {
     const pinStr = String(pinCode || "").trim();
     if (pinStr.length === 6 && !loading) {
-      axios.get(`https://api.postalpincode.in/pincode/${pinStr}`).then(res => {
-        if (res.data?.[0]?.Status === "Success") {
-          const po = res.data[0].PostOffice[0];
-          setValue("city", po.Block || po.District, { shouldValidate: true });
-          const match = states.find(s => s.state.toLowerCase() === po.State.toLowerCase())?.state || po.State;
-          setValue("state", match, { shouldValidate: true });
-        }
-      }).catch(() => {});
+      axios.get(`https://api.postalpincode.in/pincode/${pinStr}`)
+        .then(res => {
+          if (res.data?.[0]?.Status === "Success") {
+            const po = res.data[0].PostOffice[0];
+            setValue("city", po.Block || po.District, { shouldValidate: true });
+            const match = states.find(s => s.state.toLowerCase() === po.State.toLowerCase())?.state || po.State;
+            setValue("state", match, { shouldValidate: true });
+          }
+        })
+        .catch(err => {
+          console.warn("Postal Pin Code API failed (possibly due to SSL/certificate issues). Gracefully degrading to manual entry.", err);
+        });
     }
   }, [pinCode, states, setValue, loading]);
 
@@ -372,6 +387,44 @@ const StaffEditPage = () => {
                 <input {...register("ifsc_code")} className="form-input" />
               </div>
             </div>
+          </FormSection>
+
+          {/* DOCUMENTS */}
+          <FormSection title="Document Uploads" icon="upload_file">
+             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                {['aadhaar_card', 'pan_card', 'bank_proof'].map((doc) => {
+                  const docKey = doc as 'aadhaar_card' | 'pan_card' | 'bank_proof';
+                  const existingPath = existingDocs[docKey];
+                  return (
+                    <div key={doc}>
+                      <label className="form-label flex items-center justify-between">
+                        <span className="flex items-center gap-1">{doc.replace('_', ' ').toUpperCase()} <InfoTooltip /></span>
+                        {existingPath && (
+                          <a 
+                            href={`${tenantAsset}${existingPath}`} 
+                            target="_blank" 
+                            rel="noopener noreferrer" 
+                            className="text-[9px] font-bold text-[#7c3aed] hover:underline uppercase flex items-center gap-0.5"
+                          >
+                            <span className="material-symbols-outlined text-[11px]">visibility</span>
+                            View Current
+                          </a>
+                        )}
+                      </label>
+                      <label className="flex flex-col items-center justify-center h-24 rounded-[10px] bg-[#fafbff] border-[1.5px] border-dashed border-[#cbd5e1] cursor-pointer hover:border-[#7c3aed] transition-all group gap-1">
+                        <span className="material-symbols-outlined text-[24px] text-[#cbd5e1] group-hover:text-[#7c3aed]">cloud_upload</span>
+                        <span className="text-[10px] font-[700] text-[#94a3b8] group-hover:text-[#7c3aed]">Click to Update File</span>
+                        <input type="file" className="hidden" {...register(doc as any)} />
+                      </label>
+                      {existingPath && (
+                        <p className="text-[9px] text-[#94a3b8] mt-1.5 truncate max-w-full">
+                          Current: {existingPath.split('/').pop()}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })}
+             </div>
           </FormSection>
 
           <FormSection title="System Roles & Status" icon="shield_person">

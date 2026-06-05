@@ -15,7 +15,7 @@ export const validateBody = (schema: ZodSchema) => {
         res.status(400).json({
           success: false,
           error: "Validation failed",
-          details: error.errors.map((err) => ({
+          details: error.issues.map((err: any) => ({
             path: err.path.join("."),
             message: err.message,
           })),
@@ -35,14 +35,14 @@ export const validateBody = (schema: ZodSchema) => {
 export const validateQuery = (schema: ZodSchema) => {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      req.query = await schema.parseAsync(req.query);
+      req.query = await schema.parseAsync(req.query) as any;
       next();
     } catch (error) {
       if (error instanceof ZodError) {
         res.status(400).json({
           success: false,
           error: "Validation failed",
-          details: error.errors.map((err) => ({
+          details: error.issues.map((err: any) => ({
             path: err.path.join("."),
             message: err.message,
           })),
@@ -62,14 +62,14 @@ export const validateQuery = (schema: ZodSchema) => {
 export const validateParams = (schema: ZodSchema) => {
   return async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     try {
-      req.params = await schema.parseAsync(req.params);
+      req.params = await schema.parseAsync(req.params) as any;
       next();
     } catch (error) {
       if (error instanceof ZodError) {
         res.status(400).json({
           success: false,
           error: "Validation failed",
-          details: error.errors.map((err) => ({
+          details: error.issues.map((err: any) => ({
             path: err.path.join("."),
             message: err.message,
           })),

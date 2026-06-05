@@ -76,8 +76,12 @@ const DriverEditPage = () => {
       if (!id) return;
       try {
         setLoading(true);
-        const [driverRes, genders, bloodGroups, maritalStatuses, employmentTypes, statuses, fileTypes, states, vehicles, beacons] = await Promise.all([
-          tenantApi.get(`/drivers/${id}`),
+
+        // Fetch driver data first to get current beacon_id
+        const driverRes = await tenantApi.get(`/drivers/${id}`);
+        const driver = driverRes.data.data;
+
+        const [genders, bloodGroups, maritalStatuses, employmentTypes, statuses, fileTypes, states, vehicles, beacons] = await Promise.all([
           tenantApi.get(`/masters/forms/dropdowns/fields?type=common&field=gender`),
           tenantApi.get(`/masters/forms/dropdowns/fields?type=common&field=blood_group`),
           tenantApi.get(`/masters/forms/dropdowns/fields?type=common&field=marital_status`),
@@ -86,10 +90,9 @@ const DriverEditPage = () => {
           tenantApi.get(`/masters/forms/dropdowns/fields?type=driver&field=file_type`),
           tenantApi.get(`/masters/forms/dropdowns/states`),
           tenantApi.get(`/active-vehicles/for/dropdown`),
-          tenantApi.get(`/beacon-device/for/dropdown`),
+          tenantApi.get(`/beacon-device/for/dropdown?current=${encodeURIComponent(driver.beacon_id || '')}`),
         ]);
 
-        const driver = driverRes.data.data;
         if (driver.profile_photo) setPhotoPreview(`${tenantAsset}${driver.profile_photo}`);
 
         const formatDate = (d: string) => d ? new Date(d).toISOString().split('T')[0] : "";
@@ -145,18 +148,21 @@ const DriverEditPage = () => {
       setDistricts(d);
     }).catch(() => {});
   }, [selectedState, loading]);
-
   useEffect(() => {
     const pinStr = String(pinCode || "").trim();
     if (pinStr.length === 6 && !loading) {
-      axios.get(`https://api.postalpincode.in/pincode/${pinStr}`).then(res => {
-        if (res.data?.[0]?.Status === "Success") {
-          const po = res.data[0].PostOffice[0];
-          setValue("city", po.Block || po.District, { shouldValidate: true });
-          const matchState = dropdowns.states.find(s => s.state.toLowerCase() === po.State.toLowerCase())?.state || po.State;
-          setValue("state", matchState, { shouldValidate: true });
-        }
-      }).catch(() => {});
+      axios.get(`https://api.postalpincode.in/pincode/${pinStr}`)
+        .then(res => {
+          if (res.data?.[0]?.Status === "Success") {
+            const po = res.data[0].PostOffice[0];
+            setValue("city", po.Block || po.District, { shouldValidate: true });
+            const matchState = dropdowns.states.find(s => s.state.toLowerCase() === po.State.toLowerCase())?.state || po.State;
+            setValue("state", matchState, { shouldValidate: true });
+          }
+        })
+        .catch(err => {
+          console.warn("Postal Pin Code API failed (possibly due to SSL/certificate issues). Gracefully degrading to manual entry.", err);
+        });
     }
   }, [pinCode, dropdowns.states, setValue, loading]);
 
@@ -169,10 +175,9 @@ const DriverEditPage = () => {
     
     try {
       const formData = new FormData();
-      formData.append("_method", "PUT");
       Object.keys(data).forEach((key) => {
         const k = key as keyof FormInputs;
-        if (data[k] instanceof FileList || k === 'license_insurance' || k === 'user') return;
+        if (data[k] instanceof FileList || k === 'license_insurance' || (k as string) === 'user') return;
         if (data[k] !== undefined && data[k] !== null && data[k] !== "") formData.append(k, String(data[k]));
       });
 
@@ -183,7 +188,7 @@ const DriverEditPage = () => {
         if (files?.[0]) formData.append(field, files[0]);
       });
 
-      await tenantApi.post(`/drivers/${id}`, formData, { headers: { "Content-Type": "multipart/form-data" } });
+      await tenantApi.put(`/drivers/${id}`, formData, { headers: { "Content-Type": "multipart/form-data" } });
       showAlert("Driver updated successfully!", "success");
       navigate("/drivers");
     } catch (error: any) {

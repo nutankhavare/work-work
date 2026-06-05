@@ -30,7 +30,7 @@ export async function getRoleById(req: Request, res: Response, next: NextFunctio
   try {
     if (!req.orgId) throw new AppError(401, "Unauthorized");
 
-    const roleId = parseInt(req.params.id, 10);
+    const roleId = parseInt(req.params.id as string, 10);
     if (isNaN(roleId)) throw new AppError(400, "Invalid role ID");
 
     const role = await rolePermissionService.getRoleById(req.orgId, roleId);
@@ -82,7 +82,7 @@ export async function updateRole(req: Request, res: Response, next: NextFunction
   try {
     if (!req.orgId) throw new AppError(401, "Unauthorized");
 
-    const roleId = parseInt(req.params.id, 10);
+    const roleId = parseInt(req.params.id as string, 10);
     if (isNaN(roleId)) throw new AppError(400, "Invalid role ID");
 
     const { name, description, permissions, department, access_level, status } = req.body;
@@ -114,7 +114,7 @@ export async function deleteRole(req: Request, res: Response, next: NextFunction
   try {
     if (!req.orgId) throw new AppError(401, "Unauthorized");
 
-    const roleId = parseInt(req.params.id, 10);
+    const roleId = parseInt(req.params.id as string, 10);
     if (isNaN(roleId)) throw new AppError(400, "Invalid role ID");
 
     await rolePermissionService.deleteRole(req.orgId, roleId);
@@ -171,7 +171,7 @@ export async function createPermission(req: Request, res: Response, next: NextFu
  */
 export async function deletePermission(req: Request, res: Response, next: NextFunction): Promise<void> {
   try {
-    const permissionId = parseInt(req.params.id, 10);
+    const permissionId = parseInt(req.params.id as string, 10);
     if (isNaN(permissionId)) throw new AppError(400, "Invalid permission ID");
 
     await rolePermissionService.deletePermission(permissionId);

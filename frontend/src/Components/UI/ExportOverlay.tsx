@@ -1,4 +1,4 @@
-import React, { useState, useRef, useCallback } from "react";
+import React, { useState, useRef } from "react";
 import jsPDF from "jspdf";
 import { 
   X, 
@@ -10,7 +10,7 @@ import {
   Palette,
   FileBadge
 } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 
 interface ExportOverlayProps {
   onClose: () => void;

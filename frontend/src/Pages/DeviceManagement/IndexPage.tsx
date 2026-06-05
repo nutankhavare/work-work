@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { Radio, Bluetooth, Search, Monitor, Link2, Link2Off, Trash2, Cpu, Battery, Power } from "lucide-react";
+import { Radio, Bluetooth, Search, Monitor, Link2, Link2Off, Cpu } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import PageHeader from "../../Components/UI/PageHeader";
 import { Loader } from "../../Components/UI/Loader";

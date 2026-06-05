@@ -3,7 +3,7 @@
   "private": true,
   "scripts": {
     "dev:backend": "cd backend && bun run dev",
-    "dev:frontend": "cd frontend && bun run dev",
+    "dev:frontend": "cd frontend && bun --bun run dev",
     "install:all": "cd backend && bun install && cd ../frontend && bun install"
   }
 }

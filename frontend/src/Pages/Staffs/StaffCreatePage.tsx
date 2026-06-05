@@ -2,7 +2,7 @@
 import { useState, useEffect } from "react";
 import { useForm, type SubmitHandler, Controller, useFieldArray, useWatch } from "react-hook-form";
 import { useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+// import { motion } from "framer-motion";
 import axios from "axios";
 
 // Components
@@ -12,7 +12,7 @@ import tenantApi from "../../Services/ApiService";
 import { useAlert } from "../../Context/AlertContext";
 import { useConfirm } from "../../Context/ConfirmContext";
 import InfoTooltip from "../../Components/UI/InfoTooltip";
-import type { Dependant, Employee, Role } from "./Staff.types";
+import type { Employee, Role } from "./Staff.types";
 import type { BeaconDevice, StateDistrict } from "../../Types/Index";
 
 const FormSection = ({ title, icon, children, color = "var(--primary)" }: any) => (
@@ -56,7 +56,7 @@ const StaffCreatePage = () => {
     },
   });
 
-  const { fields, replace, append, remove } = useFieldArray({ control, name: "dependants" });
+  const { replace } = useFieldArray({ control, name: "dependants" });
   const maritalStatus = useWatch({ control, name: "marital_status" });
   const selectedState = useWatch({ control, name: "state" });
   const pinCode = useWatch({ control, name: "pin_code" });
@@ -99,18 +99,21 @@ const StaffCreatePage = () => {
       })
       .catch(() => {});
   }, [selectedState]);
-
   useEffect(() => {
     const pinStr = String(pinCode || "").trim();
     if (pinStr.length === 6) {
-      axios.get(`https://api.postalpincode.in/pincode/${pinStr}`).then(res => {
-        if (res.data?.[0]?.Status === "Success") {
-          const po = res.data[0].PostOffice[0];
-          setValue("city", po.Block || po.District, { shouldValidate: true });
-          const match = states.find(s => s.state.toLowerCase() === po.State.toLowerCase())?.state || po.State;
-          setValue("state", match, { shouldValidate: true });
-        }
-      }).catch(() => {});
+      axios.get(`https://api.postalpincode.in/pincode/${pinStr}`)
+        .then(res => {
+          if (res.data?.[0]?.Status === "Success") {
+            const po = res.data[0].PostOffice[0];
+            setValue("city", po.Block || po.District, { shouldValidate: true });
+            const match = states.find(s => s.state.toLowerCase() === po.State.toLowerCase())?.state || po.State;
+            setValue("state", match, { shouldValidate: true });
+          }
+        })
+        .catch(err => {
+          console.warn("Postal Pin Code API failed (possibly due to SSL/certificate issues). Gracefully degrading to manual entry.", err);
+        });
     }
   }, [pinCode, states, setValue]);
 
